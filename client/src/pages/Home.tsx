@@ -1,21 +1,26 @@
 // ============================================================
 // PRESENÇOBRIGATÓRIA — Gestão de Extratos
 // Design: Corporate Brutalism — IBM Plex, cores funcionais
-// Sistema de abas mensais com persistência no localStorage
+// Sistema de abas mensais + painel de configurações
 // ============================================================
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import {
-  Movimento, TipoMovimento, TIPOS,
+  Movimento, TipoMovimento, TIPOS_PADRAO,
   TIPO_ROW_CLASS, TIPO_BADGE_CLASS,
   gerarDescricao, calcularValorBase, formatEur,
   totalPorTipo, gerarDocumentoFinal, extrairInst, mesAnterior,
+  ConfigEmpresa, EMPRESA_PADRAO,
 } from "@/lib/faturas";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp, Building2, CheckCircle2, Trash2, Plus } from "lucide-react";
+import {
+  Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
+  Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
+} from "lucide-react";
 
 // ─── Constantes ────────────────────────────────────────────
 const MESES = [
@@ -25,6 +30,7 @@ const MESES = [
 const MES_ATUAL = MESES[new Date().getMonth()];
 const ANO_ATUAL = new Date().getFullYear();
 const STORAGE_KEY = "presenca_meses_v1";
+const CONFIG_KEY  = "presenca_config_v1";
 
 // ─── Tipos ─────────────────────────────────────────────────
 interface EstadoMes {
@@ -35,18 +41,51 @@ interface EstadoMes {
   finalizado: boolean;
 }
 
-// ─── Resumo por tipo ───────────────────────────────────────
-const RESUMO_TIPOS: { tipo: TipoMovimento; label: string; badgeClass: string }[] = [
-  { tipo: "GERAR FATURA",        label: "Gerar Fatura",        badgeClass: "badge-fatura" },
-  { tipo: "RECIBO VERDE",        label: "Recibo Verde",        badgeClass: "badge-recibo-verde" },
-  { tipo: "RECIBO",              label: "Recibo",              badgeClass: "badge-recibo" },
-  { tipo: "FATURA COMPRA",       label: "Fatura Compra",       badgeClass: "badge-compra" },
-  { tipo: "MANUTENÇÃO DE CONTA", label: "Manutenção Conta",    badgeClass: "badge-manutencao" },
-  { tipo: "PAGAMENTO AO ESTADO", label: "Pagamento ao Estado", badgeClass: "badge-estado" },
-  { tipo: "AVENÇA CONTAB",       label: "Avença Contab.",      badgeClass: "badge-avenca" },
-  { tipo: "SEGURO BANCARIO",     label: "Seguro Bancário",     badgeClass: "badge-seguro" },
-  { tipo: "RECIBO SALARIO",      label: "Recibo Salário",      badgeClass: "badge-salario" },
-];
+interface Config {
+  empresa: ConfigEmpresa;
+  tipos: string[];
+}
+
+// ─── Persistência ─────────────────────────────────────────
+function carregarStorage(): EstadoMes[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as EstadoMes[];
+  } catch { return []; }
+}
+
+function salvarStorage(meses: EstadoMes[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(meses)); } catch { /* quota */ }
+}
+
+function carregarConfig(): Config {
+  try {
+    const raw = localStorage.getItem(CONFIG_KEY);
+    if (!raw) return { empresa: EMPRESA_PADRAO, tipos: TIPOS_PADRAO as string[] };
+    return JSON.parse(raw) as Config;
+  } catch { return { empresa: EMPRESA_PADRAO, tipos: TIPOS_PADRAO as string[] }; }
+}
+
+function salvarConfig(cfg: Config) {
+  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch { /* quota */ }
+}
+
+function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
+
+// ─── Resumo por tipo (dinâmico) ────────────────────────────
+const BADGE_MAP: Record<string, string> = {
+  "GERAR FATURA":        "badge-fatura",
+  "RECIBO VERDE":        "badge-recibo-verde",
+  "RECIBO":              "badge-recibo",
+  "RECEBIMENTO":         "badge-recebimento",
+  "FATURA COMPRA":       "badge-compra",
+  "MANUTENÇÃO DE CONTA": "badge-manutencao",
+  "PAGAMENTO AO ESTADO": "badge-estado",
+  "AVENÇA CONTAB":       "badge-avenca",
+  "SEGURO BANCARIO":     "badge-seguro",
+  "RECIBO SALARIO":      "badge-salario",
+};
 
 // ─── Parser XLSX BPI ───────────────────────────────────────
 function parsearXlsx(buffer: ArrayBuffer): Movimento[] {
@@ -78,35 +117,150 @@ function parsearXlsx(buffer: ArrayBuffer): Movimento[] {
   return movs;
 }
 
-// ─── Persistência ─────────────────────────────────────────
-function carregarStorage(): EstadoMes[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as EstadoMes[];
-  } catch { return []; }
-}
+// ─── Painel de Configurações ───────────────────────────────
+function PainelConfig({
+  config, onSave, onClose,
+}: {
+  config: Config;
+  onSave: (cfg: Config) => void;
+  onClose: () => void;
+}) {
+  const [empresa, setEmpresa] = useState<ConfigEmpresa>({ ...config.empresa });
+  const [tipos, setTipos] = useState<string[]>([...config.tipos]);
+  const [novoTipo, setNovoTipo] = useState("");
 
-function salvarStorage(meses: EstadoMes[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(meses));
-  } catch { /* quota exceeded */ }
-}
+  const adicionarTipo = () => {
+    const t = novoTipo.trim().toUpperCase();
+    if (!t || tipos.includes(t)) { setNovoTipo(""); return; }
+    setTipos(prev => [...prev, t]);
+    setNovoTipo("");
+  };
 
-function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
+  const removerTipo = (t: string) => {
+    setTipos(prev => prev.filter(x => x !== t));
+  };
+
+  const guardar = () => {
+    if (!empresa.nome.trim() || !empresa.nif.trim()) {
+      toast.error("Nome e NIF da empresa são obrigatórios.");
+      return;
+    }
+    onSave({ empresa, tipos });
+    toast.success("Configurações guardadas!");
+    onClose();
+  };
+
+  const repor = () => {
+    setEmpresa({ ...EMPRESA_PADRAO });
+    setTipos([...TIPOS_PADRAO]);
+    toast.info("Valores reposto para os padrão.");
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Empresa */}
+      <div>
+        <h3 className="font-bold text-sm text-[#0f2744] mb-3 uppercase tracking-wide border-b border-gray-200 pb-2">
+          Dados da Empresa
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Nome da Empresa</label>
+            <input
+              type="text"
+              value={empresa.nome}
+              onChange={e => setEmpresa(p => ({ ...p, nome: e.target.value }))}
+              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-medium text-gray-800"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">NIF</label>
+              <input
+                type="text"
+                value={empresa.nif}
+                onChange={e => setEmpresa(p => ({ ...p, nif: e.target.value }))}
+                className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-mono text-gray-800"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Morada</label>
+            <input
+              type="text"
+              value={empresa.morada}
+              onChange={e => setEmpresa(p => ({ ...p, morada: e.target.value }))}
+              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none text-gray-800"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tipos de Movimento */}
+      <div>
+        <h3 className="font-bold text-sm text-[#0f2744] mb-3 uppercase tracking-wide border-b border-gray-200 pb-2">
+          Tipos de Movimento
+        </h3>
+        <div className="space-y-1.5 mb-3 max-h-52 overflow-y-auto pr-1">
+          {tipos.map(t => (
+            <div key={t} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-2">
+              <div className="flex items-center gap-2">
+                <GripVertical className="w-3.5 h-3.5 text-gray-400" />
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${BADGE_MAP[t] || "bg-gray-200 text-gray-700"}`}>{t}</span>
+              </div>
+              <button
+                onClick={() => removerTipo(t)}
+                className="text-red-400 hover:text-red-600 transition-colors p-0.5"
+                title="Remover tipo"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={novoTipo}
+            onChange={e => setNovoTipo(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && adicionarTipo()}
+            placeholder="Novo tipo (ex: TRANSFERÊNCIA)..."
+            className="flex-1 text-xs border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none uppercase placeholder-gray-400"
+          />
+          <Button size="sm" onClick={adicionarTipo} className="h-9 text-xs bg-[#0f2744] hover:bg-[#1e3a5c] text-white gap-1">
+            <Plus className="w-3 h-3" /> Adicionar
+          </Button>
+        </div>
+      </div>
+
+      {/* Acções */}
+      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+        <button onClick={repor} className="text-xs text-gray-500 hover:text-gray-700 underline">
+          Repor valores padrão
+        </button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onClose} className="text-xs h-8 border-gray-300">
+            Cancelar
+          </Button>
+          <Button size="sm" onClick={guardar} className="text-xs h-8 bg-green-700 hover:bg-green-600 text-white gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Guardar
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Componente Principal ──────────────────────────────────
 export default function Home() {
-  // Estado global de todos os meses
   const [mesesSalvos, setMesesSalvos] = useState<EstadoMes[]>(() => carregarStorage());
-  // Aba activa
+  const [config, setConfig] = useState<Config>(() => carregarConfig());
   const [abaActiva, setAbaActiva] = useState<string>(() => {
     const saved = carregarStorage();
     if (saved.length > 0) return chave(saved[saved.length - 1].mes, saved[saved.length - 1].ano);
     return chave(MES_ATUAL, ANO_ATUAL);
   });
 
-  // Estado do mês activo (derivado)
   const estadoActivo: EstadoMes = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva) ?? {
     mes: abaActiva.split("-")[0],
     ano: parseInt(abaActiva.split("-")[1]) || ANO_ATUAL,
@@ -120,12 +274,12 @@ export default function Home() {
   const [mostrarNovoMes, setMostrarNovoMes] = useState(false);
   const [novoMesSel, setNovoMesSel] = useState(MES_ATUAL);
   const [novoAnoSel, setNovoAnoSel] = useState(ANO_ATUAL);
+  const [mostrarConfig, setMostrarConfig] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Persistir sempre que mesesSalvos muda
   useEffect(() => { salvarStorage(mesesSalvos); }, [mesesSalvos]);
+  useEffect(() => { salvarConfig(config); }, [config]);
 
-  // Garantir que o mês activo existe na lista
   useEffect(() => {
     const existe = mesesSalvos.some(m => chave(m.mes, m.ano) === abaActiva);
     if (!existe) {
@@ -135,7 +289,6 @@ export default function Home() {
     }
   }, [abaActiva, mesesSalvos]);
 
-  // Actualizar estado do mês activo
   const actualizarMesActivo = useCallback((patch: Partial<EstadoMes>) => {
     setMesesSalvos(prev => {
       const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
@@ -150,6 +303,7 @@ export default function Home() {
   }, [abaActiva]);
 
   const { movimentos, docGerado, finalizado, mes, ano } = estadoActivo;
+  const tiposActivos = config.tipos as TipoMovimento[];
 
   // ─── Handlers ────────────────────────────────────────────
   const atualizarTipo = useCallback((id: string, tipo: TipoMovimento) => {
@@ -162,9 +316,7 @@ export default function Home() {
         ...novo[idx],
         movimentos: novo[idx].movimentos.map(m => {
           if (m.id !== id) return m;
-          const desc = tipo === "GERAR FATURA" || tipo === "RECIBO VERDE" || tipo === "RECIBO" || tipo === "FATURA COMPRA"
-            ? gerarDescricao(m.descricao, tipo, mesRef, m.valor)
-            : "";
+          const desc = gerarDescricao(m.descricao, tipo, mesRef, m.valor);
           return { ...m, tipo, descricaoFatura: desc };
         }),
       };
@@ -219,7 +371,7 @@ export default function Home() {
   };
 
   const gerarDocumento = () => {
-    const doc = gerarDocumentoFinal(movimentos, mes);
+    const doc = gerarDocumentoFinal(movimentos, mes, config.empresa);
     if (!doc) { toast.error("Nenhuma linha marcada como GERAR FATURA."); return; }
     actualizarMesActivo({ docGerado: doc });
     setMostrarDoc(true);
@@ -276,8 +428,16 @@ export default function Home() {
               <div className="text-blue-300 text-xs font-mono mt-0.5">UNIPESSOAL LDA · NIF 518604870</div>
             </div>
           </div>
-          <div className="text-blue-200 text-xs font-mono hidden sm:block">
-            Gestão de Extratos Bancários
+          <div className="flex items-center gap-3">
+            <div className="text-blue-200 text-xs font-mono hidden sm:block">Gestão de Extratos Bancários</div>
+            <button
+              onClick={() => setMostrarConfig(true)}
+              className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white border border-blue-700 hover:border-blue-400 px-3 py-1.5 rounded transition-colors"
+              title="Configurações"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Configurações</span>
+            </button>
           </div>
         </div>
       </header>
@@ -307,7 +467,6 @@ export default function Home() {
                       </span>
                     )}
                   </button>
-                  {/* Botão remover */}
                   {!isActive && (
                     <button
                       onClick={(e) => { e.stopPropagation(); removerMes(k); }}
@@ -317,8 +476,6 @@ export default function Home() {
                 </div>
               );
             })}
-
-            {/* Botão adicionar mês */}
             <button
               onClick={() => setMostrarNovoMes(!mostrarNovoMes)}
               className="flex items-center gap-1 px-3 py-2.5 text-xs text-blue-300 hover:text-white hover:bg-[#2a4f7a] rounded-t-lg transition-colors flex-shrink-0"
@@ -351,9 +508,7 @@ export default function Home() {
                 {[2024,2025,2026,2027].map(a => <SelectItem key={a} value={String(a)} className="text-xs">{a}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={adicionarNovoMes} className="h-7 text-xs bg-blue-600 hover:bg-blue-500">
-              Adicionar
-            </Button>
+            <Button size="sm" onClick={adicionarNovoMes} className="h-7 text-xs bg-blue-600 hover:bg-blue-500">Adicionar</Button>
             <button onClick={() => setMostrarNovoMes(false)} className="text-blue-300 hover:text-white text-xs ml-2">Cancelar</button>
           </div>
         </div>
@@ -377,11 +532,7 @@ export default function Home() {
             )}
           </div>
           {docGerado && !finalizado && (
-            <Button
-              size="sm"
-              onClick={finalizarMes}
-              className="h-8 text-xs bg-green-700 hover:bg-green-600 text-white gap-1.5"
-            >
+            <Button size="sm" onClick={finalizarMes} className="h-8 text-xs bg-green-700 hover:bg-green-600 text-white gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Finalizar mês
             </Button>
@@ -390,8 +541,6 @@ export default function Home() {
 
         {/* UPLOAD + MÉTRICAS */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-
-          {/* Upload */}
           <div className="col-span-1 flex flex-col gap-2">
             <div
               className={`flex-1 border-2 border-dashed rounded-lg p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-150
@@ -423,7 +572,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Métricas */}
           <div className="col-span-3 grid grid-cols-3 gap-3">
             {[
               { label: "Total GERAR FATURA", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#0f2744", bg: "#dbeafe" },
@@ -457,13 +605,14 @@ export default function Home() {
                 <span className="text-xs text-gray-500 font-mono bg-gray-200 px-2 py-0.5 rounded">{totalClassificados} / {movimentos.length} classificados</span>
               </div>
               <div className="flex flex-wrap gap-2 p-4">
-                {RESUMO_TIPOS.map(({ tipo, label, badgeClass }) => {
+                {tiposActivos.map(tipo => {
                   const total = totalPorTipo(movimentos, tipo);
                   const count = movimentos.filter(m => m.tipo === tipo).length;
                   if (count === 0) return null;
+                  const badgeClass = BADGE_MAP[tipo] || "bg-gray-200 text-gray-700";
                   return (
                     <div key={tipo} className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold ${badgeClass}`}>
-                      <span>{label}</span>
+                      <span>{tipo}</span>
                       <span className="font-mono">{formatEur(total)}</span>
                       <span className="opacity-70">({count})</span>
                     </div>
@@ -513,10 +662,7 @@ export default function Home() {
                       const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-white" : "bg-gray-50");
                       const badgeClass = TIPO_BADGE_CLASS[mov.tipo];
                       return (
-                        <tr
-                          key={mov.id}
-                          className={`border-b border-gray-200 transition-colors duration-100 ${rowClass}`}
-                        >
+                        <tr key={mov.id} className={`border-b border-gray-200 transition-colors duration-100 ${rowClass}`}>
                           <td className="px-4 py-3 font-mono text-xs text-gray-600 font-medium">{mov.data}</td>
                           <td className="px-4 py-3">
                             <div className="text-gray-900 text-xs leading-snug whitespace-normal break-words font-medium">
@@ -537,13 +683,16 @@ export default function Home() {
                                 {mov.tipo || "—"}
                               </span>
                             ) : (
-                              <Select value={mov.tipo || "__none__"} onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}>
+                              <Select
+                                value={mov.tipo || "__none__"}
+                                onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
+                              >
                                 <SelectTrigger className={`h-7 text-xs w-full font-semibold ${badgeClass || "bg-gray-100 text-gray-700 border-gray-300"}`}>
                                   <SelectValue placeholder="— selecionar —" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="__none__" className="text-xs text-gray-500">— selecionar —</SelectItem>
-                                  {TIPOS.map(t => (
+                                  {tiposActivos.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs font-medium">{t}</SelectItem>
                                   ))}
                                 </SelectContent>
@@ -611,10 +760,27 @@ export default function Home() {
 
       </div>
 
+      {/* MODAL CONFIGURAÇÕES */}
+      <Dialog open={mostrarConfig} onOpenChange={setMostrarConfig}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[#0f2744]">
+              <Settings className="w-4 h-4" />
+              Configurações
+            </DialogTitle>
+          </DialogHeader>
+          <PainelConfig
+            config={config}
+            onSave={(cfg) => setConfig(cfg)}
+            onClose={() => setMostrarConfig(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
       {/* FOOTER */}
       <footer className="mt-8 bg-[#0f2744] text-blue-300 text-xs py-3 border-t-2 border-[#2563eb]">
         <div className="container text-center font-mono">
-          PRESENÇOBRIGATÓRIA - UNIPESSOAL LDA · NIF 518604870 · Rua Miguel Pais, Nº 46, 1º F, Barreiro, 2830-356, Portugal
+          {config.empresa.nome} · NIF {config.empresa.nif} · {config.empresa.morada}
         </div>
       </footer>
     </div>

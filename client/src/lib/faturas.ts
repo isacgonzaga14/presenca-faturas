@@ -7,6 +7,7 @@ export type TipoMovimento =
   | "GERAR FATURA"
   | "RECIBO VERDE"
   | "RECIBO"
+  | "RECEBIMENTO"
   | "FATURA COMPRA"
   | "MANUTENÇÃO DE CONTA"
   | "PAGAMENTO AO ESTADO"
@@ -26,10 +27,12 @@ export interface Movimento {
   inst?: string;
 }
 
-export const TIPOS: TipoMovimento[] = [
+// Tipos padrão (podem ser sobrescritos pelas configurações)
+export const TIPOS_PADRAO: TipoMovimento[] = [
   "GERAR FATURA",
   "RECIBO VERDE",
   "RECIBO",
+  "RECEBIMENTO",
   "FATURA COMPRA",
   "MANUTENÇÃO DE CONTA",
   "PAGAMENTO AO ESTADO",
@@ -38,10 +41,13 @@ export const TIPOS: TipoMovimento[] = [
   "RECIBO SALARIO",
 ];
 
-export const TIPO_ROW_CLASS: Record<TipoMovimento, string> = {
+export const TIPOS: TipoMovimento[] = TIPOS_PADRAO;
+
+export const TIPO_ROW_CLASS: Record<string, string> = {
   "GERAR FATURA":        "row-fatura",
   "RECIBO VERDE":        "row-recibo-verde",
   "RECIBO":              "row-recibo",
+  "RECEBIMENTO":         "row-recebimento",
   "FATURA COMPRA":       "row-compra",
   "MANUTENÇÃO DE CONTA": "row-manutencao",
   "PAGAMENTO AO ESTADO": "row-estado",
@@ -51,10 +57,11 @@ export const TIPO_ROW_CLASS: Record<TipoMovimento, string> = {
   "":                    "",
 };
 
-export const TIPO_BADGE_CLASS: Record<TipoMovimento, string> = {
+export const TIPO_BADGE_CLASS: Record<string, string> = {
   "GERAR FATURA":        "badge-fatura",
   "RECIBO VERDE":        "badge-recibo-verde",
   "RECIBO":              "badge-recibo",
+  "RECEBIMENTO":         "badge-recebimento",
   "FATURA COMPRA":       "badge-compra",
   "MANUTENÇÃO DE CONTA": "badge-manutencao",
   "PAGAMENTO AO ESTADO": "badge-estado",
@@ -99,7 +106,6 @@ export function clientePorNome(nome: string): string {
 // mesRef = mês de referência do serviço (já calculado externamente)
 export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string, valor: number): string {
   const inst = extrairInst(desc);
-  if (!inst) return "";
   const nome = extrairNome(desc);
   const cliente = clientePorNome(nome);
   const clienteStr = cliente ? ` ao ${cliente},` : "";
@@ -107,13 +113,16 @@ export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string
 
   switch (tipo) {
     case "GERAR FATURA":
+      if (!inst) return "";
       return `Serviço prestado no mês de ${mesRef}${clienteStr} como porteiro em eventos e festas privadas (INST ${inst}).${numerario}`;
     case "RECIBO VERDE":
-      return `Recibo verde — Serviço prestado no mês de ${mesRef}${clienteStr} (INST ${inst}).`;
+      return "Apresentar recibo.";
     case "RECIBO":
-      return `Recibo — Serviço prestado no mês de ${mesRef} (INST ${inst}).`;
+      return "Apresentar recibo.";
+    case "RECEBIMENTO":
+      return inst ? `Recebimento referente ao mês de ${mesRef} (INST ${inst}).` : `Recebimento referente ao mês de ${mesRef}.`;
     case "FATURA COMPRA":
-      return `Fatura de compra referente ao mês de ${mesRef} (INST ${inst}).`;
+      return inst ? `Fatura de compra referente ao mês de ${mesRef} (INST ${inst}).` : `Fatura de compra referente ao mês de ${mesRef}.`;
     default:
       return "";
   }
@@ -135,7 +144,6 @@ export function totalPorTipo(movimentos: Movimento[], tipo: TipoMovimento): numb
 
 // Parsear linha do extrato BPI
 export function parsearLinhaExtrato(linha: string, idx: number): Movimento | null {
-  // Formato esperado: data \t descrição \t valor
   const partes = linha.split(/\t/);
   if (partes.length < 3) return null;
   const data = partes[0].trim();
@@ -168,15 +176,25 @@ export function parsearExtrato(texto: string): Movimento[] {
   return movimentos;
 }
 
+// Configurações da empresa
+export interface ConfigEmpresa {
+  nome: string;
+  nif: string;
+  morada: string;
+}
+
+export const EMPRESA_PADRAO: ConfigEmpresa = {
+  nome: "PRESENÇOBRIGATÓRIA - UNIPESSOAL LDA",
+  nif: "518604870",
+  morada: "Rua Miguel Pais, Nº 46, 1º F, Barreiro, 2830-356, Portugal",
+};
+
 // Gerar texto final para WhatsApp/fatura
 export function gerarDocumentoFinal(
   movimentos: Movimento[],
   mes: string,
-  empresa = {
-    nome: "PRESENÇOBRIGATÓRIA - UNIPESSOAL LDA",
-    nif: "518604870",
-    morada: "Rua Miguel Pais, Nº 46, 1º F, Barreiro, 2830-356, Portugal",
-  }
+  empresa: ConfigEmpresa = EMPRESA_PADRAO,
+  tiposExtras: string[] = []
 ): string {
   const selecionados = movimentos.filter(m => m.tipo === "GERAR FATURA");
   if (selecionados.length === 0) return "";
@@ -210,7 +228,20 @@ export function gerarDocumentoFinal(
   for (const [, movs] of Object.entries(grupos)) {
     const totalGrupo = movs.reduce((s, m) => s + m.valor, 0);
     const baseGrupo = calcularValorBase(totalGrupo);
-    const desc = gerarDescricao(movs[0].descricao, "GERAR FATURA", mesRef, totalGrupo);
+
+    // Recolher TODAS as INSTs do grupo
+    const insts = movs
+      .map(m => m.inst)
+      .filter((i): i is string => !!i)
+      .join(", ");
+
+    // Gerar descrição com todas as INSTs
+    const nome = extrairNome(movs[0].descricao) || movs[0].descricao.slice(0, 20);
+    const cliente = clientePorNome(nome);
+    const clienteStr = cliente ? ` ao ${cliente},` : "";
+    const numerario = totalGrupo > 1800 ? " Pagamentos em numerario." : "";
+    const instStr = insts ? ` (INST ${insts})` : "";
+    const desc = `Serviço prestado no mês de ${mesRef}${clienteStr} como porteiro em eventos e festas privadas${instStr}.${numerario}`;
 
     doc += `📄 Fatura ${fatNum}\n`;
     doc += `${desc}\n`;
