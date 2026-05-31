@@ -181,6 +181,9 @@ export function gerarDocumentoFinal(
   const selecionados = movimentos.filter(m => m.tipo === "GERAR FATURA");
   if (selecionados.length === 0) return "";
 
+  // Mês de referência = mês anterior ao mês do extrato (igual à tabela)
+  const mesRef = mesAnterior(mes);
+
   // Agrupar por nome (extrairNome)
   const grupos: Record<string, Movimento[]> = {};
   for (const m of selecionados) {
@@ -207,8 +210,7 @@ export function gerarDocumentoFinal(
   for (const [, movs] of Object.entries(grupos)) {
     const totalGrupo = movs.reduce((s, m) => s + m.valor, 0);
     const baseGrupo = calcularValorBase(totalGrupo);
-    const insts = movs.map(m => m.inst).filter(Boolean).join(", ");
-    const desc = gerarDescricao(movs[0].descricao, "GERAR FATURA", mes, totalGrupo);
+    const desc = gerarDescricao(movs[0].descricao, "GERAR FATURA", mesRef, totalGrupo);
 
     doc += `📄 Fatura ${fatNum}\n`;
     doc += `${desc}\n`;
