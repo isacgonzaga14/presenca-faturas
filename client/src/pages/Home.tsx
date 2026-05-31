@@ -50,16 +50,34 @@ const DEMO_MOVIMENTOS: Movimento[] = [
 function parsearXlsx(buffer: ArrayBuffer): Movimento[] {
   const wb = XLSX.read(buffer, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+  // Formato BPI: header nas primeiras linhas, dados a partir da linha com "Data Mov."
+  // Colunas: A=Data Mov., B=Data Valor, C=Descrição, D=Valor EUR, E=Saldo EUR
+  const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
   const movs: Movimento[] = [];
   let idx = 0;
+  let headerFound = false;
+
   for (const row of rows) {
-    if (!row || row.length < 3) continue;
-    const data = String(row[0] || "").trim();
-    const desc = String(row[1] || "").trim();
-    const valStr = String(row[2] || "").trim().replace(/\./g, "").replace(",", ".");
+    if (!row) continue;
+
+    // Detetar linha de cabeçalho dos dados
+    const col0 = String(row[0] || "").trim();
+    if (!headerFound) {
+      if (col0 === "Data Mov.") { headerFound = true; }
+      continue;
+    }
+
+    // Ler colunas no formato BPI: A=data, C=descrição, D=valor
+    const data = col0;
+    const desc = String(row[2] || "").trim();
+    const valStr = String(row[3] || "").trim()
+      .replace(/\s/g, "")
+      .replace(/\./g, "")   // separador de milhar PT
+      .replace(",", ".");   // decimal PT
     const valor = Math.abs(parseFloat(valStr));
-    if (!data.match(/\d{2}[-/]\d{2}[-/]\d{4}/) || isNaN(valor)) continue;
+
+    if (!data.match(/\d{2}[-/]\d{2}[-/]\d{4}/) || !desc || isNaN(valor) || valor === 0) continue;
+
     const inst = extrairInst(desc) ?? undefined;
     movs.push({ id: `mov-${idx++}`, data, descricao: desc, valor, tipo: "", descricaoFatura: "", nomeFatura: "", inst });
   }
