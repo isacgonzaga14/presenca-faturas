@@ -99,6 +99,7 @@ const RESUMO_TIPOS: { tipo: TipoMovimento; label: string; badgeClass: string }[]
 
 export default function Home() {
   const [movimentos, setMovimentos] = useState<Movimento[]>(DEMO_MOVIMENTOS);
+  const [isDemo, setIsDemo] = useState<boolean>(true);
   const [mes, setMes] = useState<string>(MES_ATUAL);
   const [docGerado, setDocGerado] = useState<string>("");
   const [mostrarDoc, setMostrarDoc] = useState(false);
@@ -120,6 +121,15 @@ export default function Home() {
     setMovimentos(prev => prev.map(m => m.id === id ? { ...m, nomeFatura: nome } : m));
   }, []);
 
+  const limparDados = useCallback(() => {
+    setMovimentos([]);
+    setIsDemo(false);
+    setDocGerado("");
+    setMostrarDoc(false);
+    if (fileRef.current) fileRef.current.value = "";
+    toast.info("Dados limpos. Carregue um novo extrato.");
+  }, []);
+
   const carregarFicheiro = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -127,9 +137,12 @@ export default function Home() {
         const buffer = e.target?.result as ArrayBuffer;
         const movs = parsearXlsx(buffer);
         if (movs.length === 0) { toast.error("Nenhum movimento encontrado no ficheiro."); return; }
+        // Substitui SEMPRE os dados existentes (demo ou anteriores)
         setMovimentos(movs);
+        setIsDemo(false);
         setDocGerado("");
         setMostrarDoc(false);
+        if (fileRef.current) fileRef.current.value = "";
         toast.success(`${movs.length} movimentos carregados com sucesso!`);
       } catch {
         toast.error("Erro ao ler o ficheiro. Certifique-se que é um .xlsx do BPI.");
@@ -209,20 +222,38 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* Upload */}
-          <div
-            className={`col-span-1 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-150
-              ${dragging ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50/30"}`}
-            onDragOver={e => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Upload className={`w-8 h-8 ${dragging ? "text-blue-500" : "text-gray-400"}`} />
-            <div className="text-center">
-              <div className="font-semibold text-gray-700 text-sm">Carregar Extrato</div>
-              <div className="text-gray-400 text-xs mt-1">Arraste ou clique · .xlsx do BPI</div>
+          <div className="col-span-1 flex flex-col gap-2">
+            {isDemo && (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                <span className="text-amber-600 text-xs font-semibold">DEMO</span>
+                <span className="text-amber-700 text-xs">A mostrar dados de exemplo. Carregue o seu extrato.</span>
+              </div>
+            )}
+            <div
+              className={`flex-1 border-2 border-dashed rounded-lg p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-150
+                ${dragging ? "border-blue-500 bg-blue-50" : "border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50/30"}`}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+            >
+              <Upload className={`w-8 h-8 ${dragging ? "text-blue-500" : "text-gray-400"}`} />
+              <div className="text-center">
+                <div className="font-semibold text-gray-700 text-sm">Carregar Extrato</div>
+                <div className="text-gray-400 text-xs mt-1">Arraste ou clique · .xlsx do BPI</div>
+                <div className="text-blue-500 text-xs mt-1 font-medium">Substitui os dados actuais</div>
+              </div>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
             </div>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
+            {movimentos.length > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); limparDados(); }}
+                className="w-full flex items-center justify-center gap-2 text-xs text-red-500 border border-red-200 rounded-lg py-2 hover:bg-red-50 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Limpar dados
+              </button>
+            )}
           </div>
 
           {/* Métricas */}
