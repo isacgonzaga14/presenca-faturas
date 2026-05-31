@@ -64,6 +64,17 @@ export const TIPO_BADGE_CLASS: Record<TipoMovimento, string> = {
   "":                    "",
 };
 
+// Mês anterior
+export function mesAnterior(mes: string): string {
+  const idx = [
+    "janeiro","fevereiro","março","abril","maio","junho",
+    "julho","agosto","setembro","outubro","novembro","dezembro"
+  ].indexOf(mes.toLowerCase());
+  if (idx <= 0) return "dezembro";
+  return ["janeiro","fevereiro","março","abril","maio","junho",
+    "julho","agosto","setembro","outubro","novembro","dezembro"][idx - 1];
+}
+
 // Clientes por nome
 const LX_LIVING  = ["jacqueline", "juciclecio", "diogo"];
 const MARVILA    = ["maria", "zito", "eliane", "wilson"];
@@ -85,7 +96,8 @@ export function clientePorNome(nome: string): string {
   return "";
 }
 
-export function gerarDescricao(desc: string, tipo: TipoMovimento, mes: string, valor: number): string {
+// mesRef = mês de referência do serviço (já calculado externamente)
+export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string, valor: number): string {
   const inst = extrairInst(desc);
   if (!inst) return "";
   const nome = extrairNome(desc);
@@ -95,13 +107,13 @@ export function gerarDescricao(desc: string, tipo: TipoMovimento, mes: string, v
 
   switch (tipo) {
     case "GERAR FATURA":
-      return `Serviço prestado no mês de ${mes}${clienteStr} como porteiro em eventos e festas privadas (INST ${inst}).${numerario}`;
+      return `Serviço prestado no mês de ${mesRef}${clienteStr} como porteiro em eventos e festas privadas (INST ${inst}).${numerario}`;
     case "RECIBO VERDE":
-      return `Recibo verde — Serviço prestado no mês de ${mes}${clienteStr} (INST ${inst}).`;
+      return `Recibo verde — Serviço prestado no mês de ${mesRef}${clienteStr} (INST ${inst}).`;
     case "RECIBO":
-      return `Recibo — Serviço prestado no mês de ${mes} (INST ${inst}).`;
+      return `Recibo — Serviço prestado no mês de ${mesRef} (INST ${inst}).`;
     case "FATURA COMPRA":
-      return `Fatura de compra referente ao mês de ${mes} (INST ${inst}).`;
+      return `Fatura de compra referente ao mês de ${mesRef} (INST ${inst}).`;
     default:
       return "";
   }

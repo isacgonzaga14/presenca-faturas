@@ -9,7 +9,7 @@ import {
   Movimento, TipoMovimento, TIPOS,
   TIPO_ROW_CLASS, TIPO_BADGE_CLASS,
   gerarDescricao, calcularValorBase, formatEur,
-  totalPorTipo, gerarDocumentoFinal, extrairInst,
+  totalPorTipo, gerarDocumentoFinal, extrairInst, mesAnterior,
 } from "@/lib/faturas";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -90,8 +90,9 @@ export default function Home() {
   const atualizarTipo = useCallback((id: string, tipo: TipoMovimento) => {
     setMovimentos(prev => prev.map(m => {
       if (m.id !== id) return m;
+      const mesRef = mesAnterior(mes);
       const desc = tipo === "GERAR FATURA" || tipo === "RECIBO VERDE" || tipo === "RECIBO" || tipo === "FATURA COMPRA"
-        ? gerarDescricao(m.descricao, tipo, mes, m.valor)
+        ? gerarDescricao(m.descricao, tipo, mesRef, m.valor)
         : "";
       return { ...m, tipo, descricaoFatura: desc };
     }));
@@ -288,7 +289,7 @@ export default function Home() {
                     >
                       <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{mov.data}</td>
                       <td className="px-4 py-2.5">
-                        <div className="text-gray-800 text-xs leading-snug max-w-xs truncate" title={mov.descricao}>
+                        <div className="text-gray-800 text-xs leading-snug whitespace-normal break-words">
                           {mov.descricao}
                         </div>
                         {mov.inst && (
