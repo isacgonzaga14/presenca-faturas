@@ -23,7 +23,8 @@ async function handleOAuthCallback(req: Request, res: Response) {
 
     if (!code || !state) {
       console.error("[OAuth] Missing code or state! Full query:", req.query);
-      res.status(400).send(`Missing OAuth parameters. Received: code=${code ? 'yes' : 'no'}, state=${state ? 'yes' : 'no'}. Query: ${JSON.stringify(req.query)}`);
+      // Redirect to home instead of showing a technical error
+      res.redirect(302, "/?error=login_required");
       return;
     }
 
