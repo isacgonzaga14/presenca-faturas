@@ -13,8 +13,17 @@ async function handleOAuthCallback(req: Request, res: Response) {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
 
+    console.log("[OAuth] /manus-oauth/callback hit");
+    console.log("[OAuth] query params:", JSON.stringify(req.query));
+    console.log("[OAuth] code:", code ? `${code.substring(0, 20)}...` : "MISSING");
+    console.log("[OAuth] state:", state ? `${state.substring(0, 40)}...` : "MISSING");
+    if (state) {
+      try { console.log("[OAuth] state decoded:", atob(state)); } catch { console.log("[OAuth] state not base64"); }
+    }
+
     if (!code || !state) {
-      res.status(400).send("Missing OAuth parameters");
+      console.error("[OAuth] Missing code or state! Full query:", req.query);
+      res.status(400).send(`Missing OAuth parameters. Received: code=${code ? 'yes' : 'no'}, state=${state ? 'yes' : 'no'}. Query: ${JSON.stringify(req.query)}`);
       return;
     }
 
