@@ -1,10 +1,10 @@
 // ============================================================
 // PRESENÇOBRIGATÓRIA — Gestão de Extratos
 // Design: Corporate Brutalism — IBM Plex, cores funcionais
-// Sistema de abas mensais + painel de configurações
+// Sistema multi-utilizador com login + filtro por tipo
 // ============================================================
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import * as XLSX from "xlsx";
 import {
   Movimento, TipoMovimento, TIPOS_PADRAO,
@@ -20,7 +20,11 @@ import { toast } from "sonner";
 import {
   Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
   Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
+  LogIn, LogOut, User, Filter,
 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
+import { trpc } from "@/lib/trpc";
 
 // ─── Constantes ────────────────────────────────────────────
 const MESES = [
@@ -29,8 +33,6 @@ const MESES = [
 ];
 const MES_ATUAL = MESES[new Date().getMonth()];
 const ANO_ATUAL = new Date().getFullYear();
-const STORAGE_KEY = "presenca_meses_v1";
-const CONFIG_KEY  = "presenca_config_v1";
 
 // ─── Tipos ─────────────────────────────────────────────────
 interface EstadoMes {
@@ -46,34 +48,9 @@ interface Config {
   tipos: string[];
 }
 
-// ─── Persistência ─────────────────────────────────────────
-function carregarStorage(): EstadoMes[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as EstadoMes[];
-  } catch { return []; }
-}
-
-function salvarStorage(meses: EstadoMes[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(meses)); } catch { /* quota */ }
-}
-
-function carregarConfig(): Config {
-  try {
-    const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return { empresa: EMPRESA_PADRAO, tipos: TIPOS_PADRAO as string[] };
-    return JSON.parse(raw) as Config;
-  } catch { return { empresa: EMPRESA_PADRAO, tipos: TIPOS_PADRAO as string[] }; }
-}
-
-function salvarConfig(cfg: Config) {
-  try { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); } catch { /* quota */ }
-}
-
 function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
 
-// ─── Resumo por tipo (dinâmico) ────────────────────────────
+// ─── Badge map ─────────────────────────────────────────────
 const BADGE_MAP: Record<string, string> = {
   "GERAR FATURA":        "badge-fatura",
   "RECIBO VERDE":        "badge-recibo-verde",
@@ -146,14 +123,13 @@ function PainelConfig({
       return;
     }
     onSave({ empresa, tipos });
-    toast.success("Configurações guardadas!");
     onClose();
   };
 
   const repor = () => {
     setEmpresa({ ...EMPRESA_PADRAO });
     setTipos([...TIPOS_PADRAO]);
-    toast.info("Valores reposto para os padrão.");
+    toast.info("Valores repostos para os padrão.");
   };
 
   return (
@@ -173,16 +149,14 @@ function PainelConfig({
               className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-medium text-gray-800"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">NIF</label>
-              <input
-                type="text"
-                value={empresa.nif}
-                onChange={e => setEmpresa(p => ({ ...p, nif: e.target.value }))}
-                className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-mono text-gray-800"
-              />
-            </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">NIF</label>
+            <input
+              type="text"
+              value={empresa.nif}
+              onChange={e => setEmpresa(p => ({ ...p, nif: e.target.value }))}
+              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-mono text-gray-800"
+            />
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Morada</label>
@@ -251,15 +225,112 @@ function PainelConfig({
   );
 }
 
+// ─── Ecrã de Login ─────────────────────────────────────────
+function EcraLogin() {
+  return (
+    <div className="min-h-screen bg-[#eef0f4] flex flex-col" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+      <header className="bg-[#0f2744] text-white shadow-xl border-b-4 border-[#2563eb]">
+        <div className="container py-4 flex items-center gap-3">
+          <Building2 className="w-7 h-7 text-blue-400" />
+          <div>
+            <div className="font-bold text-lg tracking-tight leading-none text-white">PRESENÇOBRIGATÓRIA</div>
+            <div className="text-blue-300 text-xs font-mono mt-0.5">Gestão de Extratos Bancários</div>
+          </div>
+        </div>
+      </header>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-10 max-w-sm w-full text-center">
+          <div className="w-16 h-16 bg-[#0f2744] rounded-full flex items-center justify-center mx-auto mb-6">
+            <Building2 className="w-8 h-8 text-blue-300" />
+          </div>
+          <h2 className="text-xl font-bold text-[#0f2744] mb-2">Bem-vindo</h2>
+          <p className="text-gray-500 text-sm mb-8">
+            Faça login para aceder à sua conta e gerir os seus extratos bancários.
+          </p>
+          <a
+            href={getLoginUrl()}
+            className="flex items-center justify-center gap-2 w-full bg-[#0f2744] hover:bg-[#1e3a5c] text-white font-semibold py-3 px-6 rounded-lg transition-colors text-sm"
+          >
+            <LogIn className="w-4 h-4" />
+            Entrar com a minha conta
+          </a>
+          <p className="text-xs text-gray-400 mt-4">
+            Cada utilizador tem os seus próprios dados separados.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente Principal ──────────────────────────────────
 export default function Home() {
-  const [mesesSalvos, setMesesSalvos] = useState<EstadoMes[]>(() => carregarStorage());
-  const [config, setConfig] = useState<Config>(() => carregarConfig());
-  const [abaActiva, setAbaActiva] = useState<string>(() => {
-    const saved = carregarStorage();
-    if (saved.length > 0) return chave(saved[saved.length - 1].mes, saved[saved.length - 1].ano);
-    return chave(MES_ATUAL, ANO_ATUAL);
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
+
+  // ─── Dados do servidor ───────────────────────────────────
+  const { data: configData, isLoading: configLoading } = trpc.config.get.useQuery(
+    undefined,
+    { enabled: isAuthenticated }
+  );
+  const { data: mesesData, isLoading: mesesLoading } = trpc.meses.list.useQuery(
+    undefined,
+    { enabled: isAuthenticated }
+  );
+
+  const saveConfigMutation = trpc.config.save.useMutation({
+    onSuccess: () => { utils.config.get.invalidate(); toast.success("Configurações guardadas!"); },
+    onError: () => toast.error("Erro ao guardar configurações."),
   });
+  const saveMesMutation = trpc.meses.save.useMutation({
+    onSuccess: () => utils.meses.list.invalidate(),
+    onError: () => toast.error("Erro ao guardar dados do mês."),
+  });
+  const deleteMesMutation = trpc.meses.delete.useMutation({
+    onSuccess: () => utils.meses.list.invalidate(),
+    onError: () => toast.error("Erro ao remover mês."),
+  });
+  const utils = trpc.useUtils();
+
+  // ─── Config local (sincronizada com servidor) ────────────
+  const [config, setConfig] = useState<Config>({
+    empresa: EMPRESA_PADRAO,
+    tipos: TIPOS_PADRAO as string[],
+  });
+
+  useEffect(() => {
+    if (configData) {
+      setConfig({
+        empresa: {
+          nome: configData.empresaNome,
+          nif: configData.empresaNif,
+          morada: configData.empresaMorada,
+        },
+        tipos: configData.tipos,
+      });
+    }
+  }, [configData]);
+
+  // ─── Meses (sincronizados com servidor) ──────────────────
+  const [mesesSalvos, setMesesSalvos] = useState<EstadoMes[]>([]);
+  const [abaActiva, setAbaActiva] = useState<string>(() => chave(MES_ATUAL, ANO_ATUAL));
+
+  useEffect(() => {
+    if (mesesData && mesesData.length > 0) {
+      setMesesSalvos(mesesData as EstadoMes[]);
+      // Activar o último mês se a aba actual não existir
+      setAbaActiva(prev => {
+        const existe = mesesData.some((m: EstadoMes) => chave(m.mes, m.ano) === prev);
+        if (!existe) {
+          const ultimo = mesesData[mesesData.length - 1] as EstadoMes;
+          return chave(ultimo.mes, ultimo.ano);
+        }
+        return prev;
+      });
+    } else if (mesesData && mesesData.length === 0) {
+      // Sem meses no servidor — iniciar com o mês actual
+      setMesesSalvos([{ mes: MES_ATUAL, ano: ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false }]);
+    }
+  }, [mesesData]);
 
   const estadoActivo: EstadoMes = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva) ?? {
     mes: abaActiva.split("-")[0],
@@ -275,35 +346,54 @@ export default function Home() {
   const [novoMesSel, setNovoMesSel] = useState(MES_ATUAL);
   const [novoAnoSel, setNovoAnoSel] = useState(ANO_ATUAL);
   const [mostrarConfig, setMostrarConfig] = useState(false);
+  const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { salvarStorage(mesesSalvos); }, [mesesSalvos]);
-  useEffect(() => { salvarConfig(config); }, [config]);
-
-  useEffect(() => {
-    const existe = mesesSalvos.some(m => chave(m.mes, m.ano) === abaActiva);
-    if (!existe) {
-      const [mes, anoStr] = abaActiva.split("-");
-      const ano = parseInt(anoStr) || ANO_ATUAL;
-      setMesesSalvos(prev => [...prev, { mes, ano, movimentos: [], docGerado: "", finalizado: false }]);
-    }
-  }, [abaActiva, mesesSalvos]);
+  // Guardar mês no servidor sempre que mudar
+  const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
+    if (!isAuthenticated) return;
+    saveMesMutation.mutate({
+      mes: estado.mes,
+      ano: estado.ano,
+      movimentosJson: JSON.stringify(estado.movimentos),
+      docGerado: estado.docGerado,
+      finalizado: estado.finalizado,
+    });
+  }, [isAuthenticated, saveMesMutation]);
 
   const actualizarMesActivo = useCallback((patch: Partial<EstadoMes>) => {
     setMesesSalvos(prev => {
       const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      let novoEstado: EstadoMes;
       if (idx === -1) {
         const [mes, anoStr] = abaActiva.split("-");
-        return [...prev, { mes, ano: parseInt(anoStr) || ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false, ...patch }];
+        novoEstado = { mes, ano: parseInt(anoStr) || ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false, ...patch };
+        const novo = [...prev, novoEstado];
+        guardarMesNoServidor(novoEstado);
+        return novo;
       }
+      novoEstado = { ...prev[idx], ...patch };
       const novo = [...prev];
-      novo[idx] = { ...novo[idx], ...patch };
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
       return novo;
     });
-  }, [abaActiva]);
+  }, [abaActiva, guardarMesNoServidor]);
 
   const { movimentos, docGerado, finalizado, mes, ano } = estadoActivo;
   const tiposActivos = config.tipos as TipoMovimento[];
+
+  // ─── Filtro por tipo ──────────────────────────────────────
+  const movimentosFiltrados = useMemo(() => {
+    if (filtroTipo === "TODOS") return movimentos;
+    if (filtroTipo === "SEM_TIPO") return movimentos.filter(m => !m.tipo);
+    return movimentos.filter(m => m.tipo === filtroTipo);
+  }, [movimentos, filtroTipo]);
+
+  const tiposComMovimentos = useMemo(() => {
+    const set = new Set(movimentos.map(m => m.tipo || "SEM_TIPO"));
+    return Array.from(set);
+  }, [movimentos]);
 
   // ─── Handlers ────────────────────────────────────────────
   const atualizarTipo = useCallback((id: string, tipo: TipoMovimento) => {
@@ -311,28 +401,36 @@ export default function Home() {
     setMesesSalvos(prev => {
       const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
       if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m => {
+        if (m.id !== id) return m;
+        const desc = gerarDescricao(m.descricao, tipo, mesRef, m.valor);
+        return { ...m, tipo, descricaoFatura: desc };
+      });
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
       const novo = [...prev];
-      novo[idx] = {
-        ...novo[idx],
-        movimentos: novo[idx].movimentos.map(m => {
-          if (m.id !== id) return m;
-          const desc = gerarDescricao(m.descricao, tipo, mesRef, m.valor);
-          return { ...m, tipo, descricaoFatura: desc };
-        }),
-      };
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
       return novo;
     });
-  }, [abaActiva, mes]);
+  }, [abaActiva, mes, guardarMesNoServidor]);
 
   const atualizarNomeFatura = useCallback((id: string, nome: string) => {
     setMesesSalvos(prev => {
       const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
       if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m => m.id === id ? { ...m, nomeFatura: nome } : m);
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
       const novo = [...prev];
-      novo[idx] = { ...novo[idx], movimentos: novo[idx].movimentos.map(m => m.id === id ? { ...m, nomeFatura: nome } : m) };
+      novo[idx] = novoEstado;
+      // Não guardar no servidor a cada tecla — guardar ao perder foco
       return novo;
     });
   }, [abaActiva]);
+
+  const guardarNomeFatura = useCallback(() => {
+    const estado = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
+    if (estado) guardarMesNoServidor(estado);
+  }, [abaActiva, mesesSalvos, guardarMesNoServidor]);
 
   const carregarFicheiro = useCallback((file: File) => {
     const reader = new FileReader();
@@ -343,6 +441,7 @@ export default function Home() {
         if (movs.length === 0) { toast.error("Nenhum movimento encontrado no ficheiro."); return; }
         actualizarMesActivo({ movimentos: movs, docGerado: "", finalizado: false });
         setMostrarDoc(false);
+        setFiltroTipo("TODOS");
         if (fileRef.current) fileRef.current.value = "";
         toast.success(`${movs.length} movimentos carregados!`);
       } catch {
@@ -366,6 +465,7 @@ export default function Home() {
   const limparDados = () => {
     actualizarMesActivo({ movimentos: [], docGerado: "", finalizado: false });
     setMostrarDoc(false);
+    setFiltroTipo("TODOS");
     if (fileRef.current) fileRef.current.value = "";
     toast.info("Dados limpos.");
   };
@@ -393,18 +493,36 @@ export default function Home() {
     const k = chave(novoMesSel, novoAnoSel);
     const existe = mesesSalvos.some(m => chave(m.mes, m.ano) === k);
     if (existe) { setAbaActiva(k); setMostrarNovoMes(false); return; }
-    setMesesSalvos(prev => [...prev, { mes: novoMesSel, ano: novoAnoSel, movimentos: [], docGerado: "", finalizado: false }]);
+    const novoEstado: EstadoMes = { mes: novoMesSel, ano: novoAnoSel, movimentos: [], docGerado: "", finalizado: false };
+    setMesesSalvos(prev => [...prev, novoEstado]);
+    guardarMesNoServidor(novoEstado);
     setAbaActiva(k);
     setMostrarNovoMes(false);
+    setFiltroTipo("TODOS");
     toast.success(`Mês ${novoMesSel} ${novoAnoSel} adicionado!`);
   };
 
   const removerMes = (k: string) => {
     if (mesesSalvos.length <= 1) { toast.error("Deve manter pelo menos um mês."); return; }
+    const [mesDel, anoStr] = k.split("-");
+    const anoDel = parseInt(anoStr) || ANO_ATUAL;
+    deleteMesMutation.mutate({ mes: mesDel, ano: anoDel });
     const novos = mesesSalvos.filter(m => chave(m.mes, m.ano) !== k);
     setMesesSalvos(novos);
-    if (abaActiva === k) setAbaActiva(chave(novos[novos.length - 1].mes, novos[novos.length - 1].ano));
+    if (abaActiva === k) {
+      setAbaActiva(chave(novos[novos.length - 1].mes, novos[novos.length - 1].ano));
+    }
     toast.info("Mês removido.");
+  };
+
+  const salvarConfig = (cfg: Config) => {
+    setConfig(cfg);
+    saveConfigMutation.mutate({
+      empresaNome: cfg.empresa.nome,
+      empresaNif: cfg.empresa.nif,
+      empresaMorada: cfg.empresa.morada,
+      tipos: cfg.tipos,
+    });
   };
 
   // ─── Métricas ─────────────────────────────────────────────
@@ -413,6 +531,22 @@ export default function Home() {
   const dezPct = baseTotal * 0.1;
   const numFaturas = movimentos.filter(m => m.tipo === "GERAR FATURA").length;
   const totalClassificados = movimentos.filter(m => m.tipo).length;
+
+  // ─── Loading / Login ──────────────────────────────────────
+  if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
+    return (
+      <div className="min-h-screen bg-[#eef0f4] flex items-center justify-center" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-[#0f2744] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-[#0f2744] font-semibold text-sm">A carregar...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <EcraLogin />;
+  }
 
   // ─── Render ───────────────────────────────────────────────
   return (
@@ -425,11 +559,15 @@ export default function Home() {
             <Building2 className="w-7 h-7 text-blue-400" />
             <div>
               <div className="font-bold text-lg tracking-tight leading-none text-white">PRESENÇOBRIGATÓRIA</div>
-              <div className="text-blue-300 text-xs font-mono mt-0.5">UNIPESSOAL LDA · NIF 518604870</div>
+              <div className="text-blue-300 text-xs font-mono mt-0.5">{config.empresa.nome} · NIF {config.empresa.nif}</div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-blue-200 text-xs font-mono hidden sm:block">Gestão de Extratos Bancários</div>
+          <div className="flex items-center gap-2">
+            {/* Utilizador */}
+            <div className="hidden sm:flex items-center gap-2 text-xs text-blue-200 bg-white/10 px-3 py-1.5 rounded border border-white/20">
+              <User className="w-3.5 h-3.5" />
+              <span>{user?.name || user?.email || "Utilizador"}</span>
+            </div>
             <button
               onClick={() => setMostrarConfig(true)}
               className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white border border-blue-700 hover:border-blue-400 px-3 py-1.5 rounded transition-colors"
@@ -437,6 +575,14 @@ export default function Home() {
             >
               <Settings className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Configurações</span>
+            </button>
+            <button
+              onClick={() => logout()}
+              className="flex items-center gap-1.5 text-xs text-red-300 hover:text-red-100 border border-red-800 hover:border-red-500 px-3 py-1.5 rounded transition-colors"
+              title="Sair"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sair</span>
             </button>
           </div>
         </div>
@@ -452,7 +598,7 @@ export default function Home() {
               return (
                 <div key={k} className="relative group flex-shrink-0">
                   <button
-                    onClick={() => { setAbaActiva(k); setMostrarDoc(false); }}
+                    onClick={() => { setAbaActiva(k); setMostrarDoc(false); setFiltroTipo("TODOS"); }}
                     className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all duration-150 capitalize
                       ${isActive
                         ? "bg-[#eef0f4] text-[#0f2744] shadow-sm"
@@ -629,8 +775,41 @@ export default function Home() {
 
             {/* TABELA */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                <span className="font-bold text-sm text-gray-800">Movimentos do Extrato</span>
+              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-sm text-gray-800">Movimentos do Extrato</span>
+                  {/* FILTRO POR TIPO */}
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-gray-500" />
+                    <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+                      <SelectTrigger className="h-7 text-xs w-44 border-gray-300 bg-white text-gray-700">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TODOS" className="text-xs font-medium">Todos ({movimentos.length})</SelectItem>
+                        {tiposActivos.map(t => {
+                          const count = movimentos.filter(m => m.tipo === t).length;
+                          if (count === 0) return null;
+                          return (
+                            <SelectItem key={t} value={t} className="text-xs">
+                              {t} ({count})
+                            </SelectItem>
+                          );
+                        })}
+                        {movimentos.filter(m => !m.tipo).length > 0 && (
+                          <SelectItem value="SEM_TIPO" className="text-xs text-gray-500">
+                            Sem tipo ({movimentos.filter(m => !m.tipo).length})
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {filtroTipo !== "TODOS" && (
+                      <span className="text-xs text-blue-600 font-semibold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                        {movimentosFiltrados.length} linha{movimentosFiltrados.length !== 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   {!finalizado && (
                     <>
@@ -658,7 +837,7 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {movimentos.map((mov, i) => {
+                    {movimentosFiltrados.map((mov, i) => {
                       const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-white" : "bg-gray-50");
                       const badgeClass = TIPO_BADGE_CLASS[mov.tipo];
                       return (
@@ -714,6 +893,7 @@ export default function Home() {
                                 type="text"
                                 value={mov.nomeFatura}
                                 onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
+                                onBlur={guardarNomeFatura}
                                 placeholder="Nome..."
                                 className="w-full text-xs bg-transparent border-b-2 border-gray-300 focus:border-blue-500 outline-none py-0.5 text-gray-800 placeholder-gray-400 font-medium"
                               />
@@ -724,6 +904,11 @@ export default function Home() {
                     })}
                   </tbody>
                 </table>
+                {movimentosFiltrados.length === 0 && filtroTipo !== "TODOS" && (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    Nenhum movimento com o tipo "{filtroTipo === "SEM_TIPO" ? "Sem tipo" : filtroTipo}"
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -771,7 +956,7 @@ export default function Home() {
           </DialogHeader>
           <PainelConfig
             config={config}
-            onSave={(cfg) => setConfig(cfg)}
+            onSave={salvarConfig}
             onClose={() => setMostrarConfig(false)}
           />
         </DialogContent>
