@@ -1,7 +1,7 @@
 // ============================================================
 // PRESENÇOBRIGATÓRIA — Gestão de Extratos
 // Design: Corporate Brutalism — IBM Plex, cores funcionais
-// Sistema multi-utilizador com login + filtro por tipo
+// Sistema multi-utilizador com login + filtro + auto-classificação
 // ============================================================
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import {
   Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
   Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
-  LogIn, LogOut, User, Filter,
+  LogIn, LogOut, User, Filter, Wand2, Save, Cloud, CloudOff,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -49,6 +49,32 @@ interface Config {
 }
 
 function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
+
+// ─── Pré-classificação automática por palavras-chave ───────
+const REGRAS_AUTO: Array<{ palavras: string[]; tipo: TipoMovimento }> = [
+  { palavras: ["seguro","seg ban","seguro bancario"], tipo: "SEGURO BANCARIO" },
+  { palavras: ["seg soc","segurança social","seg social","ss "], tipo: "PAGAMENTO AO ESTADO" },
+  { palavras: ["at ","autoridade tributaria","irs","iva ","at-"], tipo: "PAGAMENTO AO ESTADO" },
+  { palavras: ["contabilidade","contabil","avença","avenca"], tipo: "AVENÇA CONTAB" },
+  { palavras: ["manutencao","manutenção","comissão","comissao","mensalidade conta"], tipo: "MANUTENÇÃO DE CONTA" },
+  { palavras: ["recibo salario","salario","vencimento","remuneracao","remuneração"], tipo: "RECIBO SALARIO" },
+  { palavras: ["recibo verde","recibo vd"], tipo: "RECIBO VERDE" },
+  { palavras: ["inst ","transferencia inst","transf inst"], tipo: "GERAR FATURA" },
+];
+
+function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Movimento[] {
+  return movimentos.map(mov => {
+    if (mov.tipo) return mov; // já classificado, não sobrescrever
+    const descLower = mov.descricao.toLowerCase();
+    for (const regra of REGRAS_AUTO) {
+      if (regra.palavras.some(p => descLower.includes(p))) {
+        const desc = gerarDescricao(mov.descricao, regra.tipo, mesRef, mov.valor);
+        return { ...mov, tipo: regra.tipo, descricaoFatura: desc };
+      }
+    }
+    return mov;
+  });
+}
 
 // ─── Badge map ─────────────────────────────────────────────
 const BADGE_MAP: Record<string, string> = {
@@ -277,19 +303,37 @@ export default function Home() {
     { enabled: isAuthenticated }
   );
 
+  const utils = trpc.useUtils();
+
+  // ─── Estado de gravação ──────────────────────────────────
+  const [estadoGravacao, setEstadoGravacao] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const saveConfigMutation = trpc.config.save.useMutation({
-    onSuccess: () => { utils.config.get.invalidate(); toast.success("Configurações guardadas!"); },
+    onSuccess: () => {
+      utils.config.get.invalidate();
+      toast.success("Configurações guardadas!");
+    },
     onError: () => toast.error("Erro ao guardar configurações."),
   });
+
   const saveMesMutation = trpc.meses.save.useMutation({
-    onSuccess: () => utils.meses.list.invalidate(),
-    onError: () => toast.error("Erro ao guardar dados do mês."),
+    onMutate: () => setEstadoGravacao("saving"),
+    onSuccess: () => {
+      setEstadoGravacao("saved");
+      setTimeout(() => setEstadoGravacao("idle"), 2000);
+    },
+    onError: () => {
+      setEstadoGravacao("error");
+      toast.error("Erro ao guardar dados. A tentar novamente...");
+      setTimeout(() => setEstadoGravacao("idle"), 3000);
+    },
   });
+
   const deleteMesMutation = trpc.meses.delete.useMutation({
     onSuccess: () => utils.meses.list.invalidate(),
     onError: () => toast.error("Erro ao remover mês."),
   });
-  const utils = trpc.useUtils();
 
   // ─── Config local (sincronizada com servidor) ────────────
   const [config, setConfig] = useState<Config>({
@@ -317,7 +361,6 @@ export default function Home() {
   useEffect(() => {
     if (mesesData && mesesData.length > 0) {
       setMesesSalvos(mesesData as EstadoMes[]);
-      // Activar o último mês se a aba actual não existir
       setAbaActiva(prev => {
         const existe = mesesData.some((m: EstadoMes) => chave(m.mes, m.ano) === prev);
         if (!existe) {
@@ -327,7 +370,6 @@ export default function Home() {
         return prev;
       });
     } else if (mesesData && mesesData.length === 0) {
-      // Sem meses no servidor — iniciar com o mês actual
       setMesesSalvos([{ mes: MES_ATUAL, ano: ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false }]);
     }
   }, [mesesData]);
@@ -349,18 +391,23 @@ export default function Home() {
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Guardar mês no servidor sempre que mudar
+  // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
     if (!isAuthenticated) return;
-    saveMesMutation.mutate({
-      mes: estado.mes,
-      ano: estado.ano,
-      movimentosJson: JSON.stringify(estado.movimentos),
-      docGerado: estado.docGerado,
-      finalizado: estado.finalizado,
-    });
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setEstadoGravacao("saving");
+    debounceRef.current = setTimeout(() => {
+      saveMesMutation.mutate({
+        mes: estado.mes,
+        ano: estado.ano,
+        movimentosJson: JSON.stringify(estado.movimentos),
+        docGerado: estado.docGerado,
+        finalizado: estado.finalizado,
+      });
+    }, 800); // debounce de 800ms
   }, [isAuthenticated, saveMesMutation]);
 
+  // ─── Actualizar mês activo ────────────────────────────────
   const actualizarMesActivo = useCallback((patch: Partial<EstadoMes>) => {
     setMesesSalvos(prev => {
       const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
@@ -422,7 +469,6 @@ export default function Home() {
       const novoEstado = { ...prev[idx], movimentos: novosMov };
       const novo = [...prev];
       novo[idx] = novoEstado;
-      // Não guardar no servidor a cada tecla — guardar ao perder foco
       return novo;
     });
   }, [abaActiva]);
@@ -437,19 +483,30 @@ export default function Home() {
     reader.onload = (e) => {
       try {
         const buffer = e.target?.result as ArrayBuffer;
-        const movs = parsearXlsx(buffer);
-        if (movs.length === 0) { toast.error("Nenhum movimento encontrado no ficheiro."); return; }
-        actualizarMesActivo({ movimentos: movs, docGerado: "", finalizado: false });
+        const movsBrutos = parsearXlsx(buffer);
+        if (movsBrutos.length === 0) { toast.error("Nenhum movimento encontrado no ficheiro."); return; }
+
+        // Pré-classificação automática
+        const mesRef = mesAnterior(mes);
+        const movsClassificados = classificarAutomaticamente(movsBrutos, mesRef);
+        const numAutoClassificados = movsClassificados.filter(m => m.tipo).length;
+
+        actualizarMesActivo({ movimentos: movsClassificados, docGerado: "", finalizado: false });
         setMostrarDoc(false);
         setFiltroTipo("TODOS");
         if (fileRef.current) fileRef.current.value = "";
-        toast.success(`${movs.length} movimentos carregados!`);
+
+        if (numAutoClassificados > 0) {
+          toast.success(`${movsBrutos.length} movimentos carregados! ${numAutoClassificados} classificados automaticamente.`);
+        } else {
+          toast.success(`${movsBrutos.length} movimentos carregados!`);
+        }
       } catch {
         toast.error("Erro ao ler o ficheiro. Certifique-se que é um .xlsx do BPI.");
       }
     };
     reader.readAsArrayBuffer(file);
-  }, [actualizarMesActivo]);
+  }, [actualizarMesActivo, mes]);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -469,6 +526,21 @@ export default function Home() {
     if (fileRef.current) fileRef.current.value = "";
     toast.info("Dados limpos.");
   };
+
+  // ─── Pré-classificar manualmente (botão) ─────────────────
+  const preClassificarManual = useCallback(() => {
+    const mesRef = mesAnterior(mes);
+    const movsClassificados = classificarAutomaticamente(movimentos, mesRef);
+    const novos = movsClassificados.filter(m => m.tipo).length;
+    const jaClassificados = movimentos.filter(m => m.tipo).length;
+    const classificados = novos - jaClassificados;
+    actualizarMesActivo({ movimentos: movsClassificados });
+    if (classificados > 0) {
+      toast.success(`${classificados} movimento${classificados !== 1 ? "s" : ""} classificado${classificados !== 1 ? "s" : ""} automaticamente!`);
+    } else {
+      toast.info("Nenhum movimento novo para classificar automaticamente.");
+    }
+  }, [movimentos, mes, actualizarMesActivo]);
 
   const gerarDocumento = () => {
     const doc = gerarDocumentoFinal(movimentos, mes, config.empresa);
@@ -531,6 +603,7 @@ export default function Home() {
   const dezPct = baseTotal * 0.1;
   const numFaturas = movimentos.filter(m => m.tipo === "GERAR FATURA").length;
   const totalClassificados = movimentos.filter(m => m.tipo).length;
+  const semTipo = movimentos.filter(m => !m.tipo).length;
 
   // ─── Loading / Login ──────────────────────────────────────
   if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
@@ -548,6 +621,22 @@ export default function Home() {
     return <EcraLogin />;
   }
 
+  // ─── Indicador de gravação ────────────────────────────────
+  const IndicadorGravacao = () => {
+    if (estadoGravacao === "idle") return null;
+    return (
+      <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-all ${
+        estadoGravacao === "saving" ? "text-amber-300" :
+        estadoGravacao === "saved"  ? "text-green-400" :
+        "text-red-400"
+      }`}>
+        {estadoGravacao === "saving" && <><div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" /><span>A guardar...</span></>}
+        {estadoGravacao === "saved"  && <><Cloud className="w-3 h-3" /><span>Guardado ✓</span></>}
+        {estadoGravacao === "error"  && <><CloudOff className="w-3 h-3" /><span>Erro ao guardar</span></>}
+      </div>
+    );
+  };
+
   // ─── Render ───────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#eef0f4]" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
@@ -563,6 +652,7 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <IndicadorGravacao />
             {/* Utilizador */}
             <div className="hidden sm:flex items-center gap-2 text-xs text-blue-200 bg-white/10 px-3 py-1.5 rounded border border-white/20">
               <User className="w-3.5 h-3.5" />
@@ -595,6 +685,9 @@ export default function Home() {
             {mesesSalvos.map(m => {
               const k = chave(m.mes, m.ano);
               const isActive = k === abaActiva;
+              const isFinalizado = m.finalizado;
+              const temDados = m.movimentos.length > 0;
+
               return (
                 <div key={k} className="relative group flex-shrink-0">
                   <button
@@ -602,13 +695,26 @@ export default function Home() {
                     className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all duration-150 capitalize
                       ${isActive
                         ? "bg-[#eef0f4] text-[#0f2744] shadow-sm"
-                        : "bg-[#1e3a5c] text-blue-200 hover:bg-[#2a4f7a] hover:text-white"
+                        : isFinalizado
+                          ? "bg-green-900/60 text-green-300 hover:bg-green-800/70 hover:text-green-100 border border-green-700/50"
+                          : temDados
+                            ? "bg-[#1e3a5c] text-blue-100 hover:bg-[#2a4f7a] hover:text-white border border-blue-600/30"
+                            : "bg-[#1e3a5c] text-blue-300 hover:bg-[#2a4f7a] hover:text-white"
                       }`}
                   >
-                    {m.finalizado && <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />}
+                    {isFinalizado
+                      ? <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0" />
+                      : temDados
+                        ? <Save className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                        : null
+                    }
                     <span>{m.mes} {m.ano}</span>
-                    {m.movimentos.length > 0 && (
-                      <span className={`text-[10px] font-mono px-1 rounded ${isActive ? "bg-blue-100 text-blue-700" : "bg-blue-900 text-blue-300"}`}>
+                    {temDados && (
+                      <span className={`text-[10px] font-mono px-1 rounded ${
+                        isActive ? "bg-blue-100 text-blue-700" :
+                        isFinalizado ? "bg-green-800 text-green-300" :
+                        "bg-blue-900 text-blue-300"
+                      }`}>
                         {m.movimentos.length}
                       </span>
                     )}
@@ -674,6 +780,11 @@ export default function Home() {
             {movimentos.length === 0 && !finalizado && (
               <span className="text-xs text-gray-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
                 Aguardando extrato
+              </span>
+            )}
+            {movimentos.length > 0 && semTipo > 0 && !finalizado && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
+                {semTipo} sem tipo
               </span>
             )}
           </div>
@@ -813,6 +924,11 @@ export default function Home() {
                 <div className="flex gap-2">
                   {!finalizado && (
                     <>
+                      {semTipo > 0 && (
+                        <Button variant="outline" size="sm" onClick={preClassificarManual} className="text-xs h-7 gap-1 border-amber-400 text-amber-700 hover:bg-amber-50" title="Classificar automaticamente por palavras-chave">
+                          <Wand2 className="w-3 h-3" /> Auto-classificar
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" onClick={limparDados} className="text-xs h-7 gap-1 border-gray-300 text-gray-700 hover:bg-gray-100">
                         <RotateCcw className="w-3 h-3" /> Limpar
                       </Button>
