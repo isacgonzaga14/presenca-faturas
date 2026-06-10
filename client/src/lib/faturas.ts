@@ -25,6 +25,10 @@ export interface Movimento {
   descricaoFatura: string;
   nomeFatura: string;
   inst?: string;
+  // Arquivo anexado ao movimento
+  arquivoKey?: string;   // chave S3
+  arquivoUrl?: string;   // URL de acesso
+  arquivoNome?: string;  // nome original do ficheiro
 }
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)

@@ -7,6 +7,7 @@ import {
   getUserConfig, saveUserConfig,
   getUserMeses, upsertUserMes, deleteUserMes,
 } from "./db";
+import { storagePut } from "./storage";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -50,6 +51,24 @@ export const appRouter = router({
           tiposJson: JSON.stringify(input.tipos),
         });
         return { success: true };
+      }),
+  }),
+
+  // ─── Ficheiros (upload para S3) ────────────────────────────────────────────
+  ficheiros: router({
+    upload: protectedProcedure
+      .input(z.object({
+        nomeOriginal: z.string(),
+        mimeType: z.string(),
+        dadosBase64: z.string(), // ficheiro em base64
+        movId: z.string(),       // ID do movimento associado
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const ext = input.nomeOriginal.split(".").pop() || "bin";
+        const key = `user-${ctx.user.id}/ficheiros/${input.movId}-${Date.now()}.${ext}`;
+        const buffer = Buffer.from(input.dadosBase64, "base64");
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        return { key, url, nome: input.nomeOriginal };
       }),
   }),
 

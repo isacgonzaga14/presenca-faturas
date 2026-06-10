@@ -21,7 +21,9 @@ import {
   Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
   Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
   LogIn, LogOut, User, Filter, Wand2, Save, Cloud, CloudOff,
+  Paperclip, ExternalLink, Download, Edit2,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
@@ -335,6 +337,15 @@ export default function Home() {
     onError: () => toast.error("Erro ao remover mês."),
   });
 
+  const uploadFicheiroMutation = trpc.ficheiros.upload.useMutation({
+    onError: () => toast.error("Erro ao enviar ficheiro."),
+  });
+
+  // ─── Estado para edição inline de tipo ──────────────────
+  const [editandoTipo, setEditandoTipo] = useState<string | null>(null); // id do movimento
+  const [novoTipoInline, setNovoTipoInline] = useState("");
+  const fileArquivoRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   // ─── Config local (sincronizada com servidor) ────────────
   const [config, setConfig] = useState<Config>({
     empresa: EMPRESA_PADRAO,
@@ -477,6 +488,81 @@ export default function Home() {
     const estado = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
     if (estado) guardarMesNoServidor(estado);
   }, [abaActiva, mesesSalvos, guardarMesNoServidor]);
+
+  const atualizarArquivo = useCallback((id: string, arquivoKey: string, arquivoUrl: string, arquivoNome: string) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m =>
+        m.id === id ? { ...m, arquivoKey, arquivoUrl, arquivoNome } : m
+      );
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+  }, [abaActiva, guardarMesNoServidor]);
+
+  const removerArquivo = useCallback((id: string) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m =>
+        m.id === id ? { ...m, arquivoKey: undefined, arquivoUrl: undefined, arquivoNome: undefined } : m
+      );
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+  }, [abaActiva, guardarMesNoServidor]);
+
+  const handleUploadArquivo = useCallback(async (movId: string, file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Ficheiro demasiado grande. Máximo 10 MB.");
+      return;
+    }
+    const toastId = toast.loading("A enviar ficheiro...");
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = (e.target?.result as string).split(",")[1];
+        const result = await uploadFicheiroMutation.mutateAsync({
+          nomeOriginal: file.name,
+          mimeType: file.type || "application/octet-stream",
+          dadosBase64: base64,
+          movId,
+        });
+        atualizarArquivo(movId, result.key, result.url, result.nome);
+        toast.success("Ficheiro enviado!", { id: toastId });
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error("Erro ao enviar ficheiro.", { id: toastId });
+    }
+  }, [uploadFicheiroMutation, atualizarArquivo]);
+
+  const adicionarTipoInline = useCallback((movId: string) => {
+    const t = novoTipoInline.trim().toUpperCase();
+    if (!t) return;
+    // Adicionar ao config se não existir
+    if (!config.tipos.includes(t)) {
+      const novosCfg = { ...config, tipos: [...config.tipos, t] };
+      setConfig(novosCfg);
+      saveConfigMutation.mutate({
+        empresaNome: novosCfg.empresa.nome,
+        empresaNif: novosCfg.empresa.nif,
+        empresaMorada: novosCfg.empresa.morada,
+        tipos: novosCfg.tipos,
+      });
+    }
+    atualizarTipo(movId, t as TipoMovimento);
+    setEditandoTipo(null);
+    setNovoTipoInline("");
+    toast.success(`Tipo "${t}" criado e aplicado!`);
+  }, [novoTipoInline, config, saveConfigMutation, atualizarTipo]);
 
   const carregarFicheiro = useCallback((file: File) => {
     const reader = new FileReader();
@@ -972,26 +1058,56 @@ export default function Home() {
                           <td className="px-4 py-3 text-right font-mono font-bold text-sm text-red-700">
                             {formatEur(mov.valor)}
                           </td>
+                          {/* COLUNA TIPO — com opção de criar novo tipo inline */}
                           <td className="px-4 py-3">
                             {finalizado ? (
                               <span className={`text-xs font-semibold px-2 py-1 rounded ${badgeClass || "bg-gray-100 text-gray-600"}`}>
                                 {mov.tipo || "—"}
                               </span>
+                            ) : editandoTipo === mov.id ? (
+                              <div className="flex flex-col gap-1">
+                                <div className="flex gap-1">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={novoTipoInline}
+                                    onChange={e => setNovoTipoInline(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === "Enter") adicionarTipoInline(mov.id);
+                                      if (e.key === "Escape") { setEditandoTipo(null); setNovoTipoInline(""); }
+                                    }}
+                                    placeholder="Novo tipo..."
+                                    className="flex-1 text-xs border-2 border-blue-400 rounded px-2 py-1 outline-none uppercase font-semibold"
+                                  />
+                                  <button onClick={() => adicionarTipoInline(mov.id)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700">✓</button>
+                                  <button onClick={() => { setEditandoTipo(null); setNovoTipoInline(""); }} className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded hover:bg-gray-300">×</button>
+                                </div>
+                                <span className="text-[10px] text-gray-400">Enter para confirmar, Esc para cancelar</span>
+                              </div>
                             ) : (
-                              <Select
-                                value={mov.tipo || "__none__"}
-                                onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
-                              >
-                                <SelectTrigger className={`h-7 text-xs w-full font-semibold ${badgeClass || "bg-gray-100 text-gray-700 border-gray-300"}`}>
-                                  <SelectValue placeholder="— selecionar —" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__" className="text-xs text-gray-500">— selecionar —</SelectItem>
-                                  {tiposActivos.map(t => (
-                                    <SelectItem key={t} value={t} className="text-xs font-medium">{t}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <div className="flex items-center gap-1">
+                                <Select
+                                  value={mov.tipo || "__none__"}
+                                  onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
+                                >
+                                  <SelectTrigger className={`h-7 text-xs flex-1 font-semibold ${badgeClass || "bg-gray-100 text-gray-700 border-gray-300"}`}>
+                                    <SelectValue placeholder="— selecionar —" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__" className="text-xs text-gray-500">— selecionar —</SelectItem>
+                                    {tiposActivos.map(t => (
+                                      <SelectItem key={t} value={t} className="text-xs font-medium">{t}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <button
+                                  onClick={() => { setEditandoTipo(mov.id); setNovoTipoInline(""); }}
+                                  className="p-1 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                                  title="Criar novo tipo"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                              </div>
                             )}
                           </td>
                           <td className="px-4 py-3">
@@ -1001,19 +1117,77 @@ export default function Home() {
                               <span className="text-gray-400 text-xs">—</span>
                             )}
                           </td>
+                          {/* COLUNA NOME FATURA — com upload de arquivo */}
                           <td className="px-4 py-3">
-                            {finalizado ? (
-                              <span className="text-xs text-gray-700">{mov.nomeFatura || "—"}</span>
-                            ) : (
-                              <input
-                                type="text"
-                                value={mov.nomeFatura}
-                                onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
-                                onBlur={guardarNomeFatura}
-                                placeholder="Nome..."
-                                className="w-full text-xs bg-transparent border-b-2 border-gray-300 focus:border-blue-500 outline-none py-0.5 text-gray-800 placeholder-gray-400 font-medium"
-                              />
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {/* Campo de texto nome */}
+                              {finalizado ? (
+                                <span className="text-xs text-gray-700 font-medium">{mov.nomeFatura || "—"}</span>
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={mov.nomeFatura}
+                                  onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
+                                  onBlur={guardarNomeFatura}
+                                  placeholder="Nome..."
+                                  className="w-full text-xs bg-transparent border-b-2 border-gray-300 focus:border-blue-500 outline-none py-0.5 text-gray-800 placeholder-gray-400 font-medium"
+                                />
+                              )}
+                              {/* Arquivo anexado */}
+                              {mov.arquivoUrl ? (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <Paperclip className="w-3 h-3 text-blue-500 flex-shrink-0" />
+                                  <a
+                                    href={mov.arquivoUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 underline truncate max-w-[80px] font-medium"
+                                    title={mov.arquivoNome}
+                                  >
+                                    {mov.arquivoNome || "Ver arquivo"}
+                                  </a>
+                                  <a
+                                    href={mov.arquivoUrl}
+                                    download={mov.arquivoNome}
+                                    className="text-gray-400 hover:text-green-600 transition-colors flex-shrink-0"
+                                    title="Baixar arquivo"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </a>
+                                  {!finalizado && (
+                                    <button
+                                      onClick={() => removerArquivo(mov.id)}
+                                      className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0"
+                                      title="Remover arquivo"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : !finalizado ? (
+                                <div>
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.doc,.docx"
+                                    className="hidden"
+                                    ref={el => { fileArquivoRefs.current[mov.id] = el; }}
+                                    onChange={e => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleUploadArquivo(mov.id, f);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => fileArquivoRefs.current[mov.id]?.click()}
+                                    className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-blue-600 transition-colors border border-dashed border-gray-300 hover:border-blue-400 rounded px-1.5 py-0.5"
+                                    title="Anexar arquivo"
+                                  >
+                                    <Paperclip className="w-2.5 h-2.5" />
+                                    <span>Anexar</span>
+                                  </button>
+                                </div>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
