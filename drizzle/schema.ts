@@ -41,9 +41,6 @@ export const userMes = mysqlTable("user_mes", {
   movimentosJson: text("movimentosJson").notNull().default("[]"),
   docGerado: text("docGerado").notNull().default(""),
   finalizado: boolean("finalizado").notNull().default(false),
-  // JSON com documentos analisados e correspondências confirmadas
-  documentosJson: text("documentosJson").notNull().default("[]"),
-  correspondenciasJson: text("correspondenciasJson").notNull().default("[]"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
