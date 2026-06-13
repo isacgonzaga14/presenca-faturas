@@ -25,6 +25,10 @@ export interface Movimento {
   descricaoFatura: string;
   nomeFatura: string;
   inst?: string;
+  // Conciliação: arquivo PDF ligado ao movimento
+  arquivoNome?: string;   // nome do ficheiro PDF
+  arquivoUrl?: string;    // URL blob local para visualizar
+  statusDoc?: "conciliado" | "sem_doc"; // calculado dinamicamente
 }
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)

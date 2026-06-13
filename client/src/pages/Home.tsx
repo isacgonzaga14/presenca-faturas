@@ -21,6 +21,7 @@ import {
   Upload, FileText, Copy, RotateCcw, ChevronDown, ChevronUp,
   Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
   LogIn, LogOut, User, Filter, Wand2, Save, Cloud, CloudOff,
+  Paperclip, FolderOpen, FileCheck2, FileX2, Download, ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -390,6 +391,118 @@ export default function Home() {
   const [mostrarConfig, setMostrarConfig] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const fileRef = useRef<HTMLInputElement>(null);
+  const pastaRef = useRef<HTMLInputElement>(null);
+  const [mostrarRelatorio, setMostrarRelatorio] = useState(false);
+
+  // ─── Conciliar PDFs por nome de ficheiro ───────────────────────
+  const conciliarPdfs = useCallback((files: FileList) => {
+    if (!files.length) return;
+    const pdfs = Array.from(files).filter(f =>
+      f.name.toLowerCase().endsWith(".pdf") ||
+      f.name.toLowerCase().endsWith(".png") ||
+      f.name.toLowerCase().endsWith(".jpg") ||
+      f.name.toLowerCase().endsWith(".jpeg")
+    );
+    if (pdfs.length === 0) { toast.error("Nenhum PDF ou imagem encontrado na pasta."); return; }
+
+    // Estratégia 1: INST no nome do ficheiro (ex: inst-163, INST163)
+    // Estratégia 2: valor no nome do ficheiro (ex: 480.00, 480,00)
+    const movsActuais = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva)?.movimentos ?? [];
+    let ligacoes = 0;
+
+    const novosMov = movsActuais.map(mov => {
+      if (mov.arquivoNome) return mov; // já tem arquivo ligado
+      const nomeLower = "";
+
+      // Tenta por INST
+      if (mov.inst) {
+        const match = pdfs.find(f => {
+          const n = f.name.toLowerCase();
+          return n.includes(`inst-${mov.inst}`) ||
+                 n.includes(`inst${mov.inst}`) ||
+                 n.includes(`inst_${mov.inst}`) ||
+                 n.includes(`-${mov.inst}_`) ||
+                 n.includes(`_${mov.inst}_`) ||
+                 n.includes(`_${mov.inst}.`) ||
+                 n.includes(`-${mov.inst}.`);
+        });
+        if (match) {
+          ligacoes++;
+          const url = URL.createObjectURL(match);
+          return { ...mov, arquivoNome: match.name, arquivoUrl: url };
+        }
+      }
+
+      // Tenta por valor (ex: 480.00 ou 480,00 no nome)
+      const valorStr = mov.valor.toFixed(2).replace(".", "[.,]");
+      const valorRe = new RegExp(valorStr);
+      const matchValor = pdfs.find(f => valorRe.test(f.name));
+      if (matchValor) {
+        ligacoes++;
+        const url = URL.createObjectURL(matchValor);
+        return { ...mov, arquivoNome: matchValor.name, arquivoUrl: url };
+      }
+
+      return mov;
+    });
+
+    // Calcula status de cada movimento
+    const movsComStatus = novosMov.map(m => ({
+      ...m,
+      statusDoc: m.arquivoNome
+        ? ("conciliado" as const)
+        : (m.tipo === "GERAR FATURA" || m.tipo === "RECIBO VERDE"
+            ? ("sem_doc" as const)
+            : undefined),
+    }));
+
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novoEstado = { ...prev[idx], movimentos: movsComStatus };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      return novo;
+    });
+    toast.success(`${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} lido${pdfs.length !== 1 ? "s" : ""}. ${ligacoes} correspondência${ligacoes !== 1 ? "s" : ""} encontrada${ligacoes !== 1 ? "s" : ""}.`);
+  }, [mesesSalvos, abaActiva]);
+
+  const onPastaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) conciliarPdfs(e.target.files);
+    if (pastaRef.current) pastaRef.current.value = "";
+  };
+
+  // ─── Exportar relatório CSV para contabilista ─────────────
+  const exportarCsv = useCallback(() => {
+    const estadoAtual = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
+    const movsAtual = estadoAtual?.movimentos ?? [];
+    const mesAtual = estadoAtual?.mes ?? "";
+    const anoAtual = estadoAtual?.ano ?? ANO_ATUAL;
+    const linhas = [
+      ["Data", "Descrição", "Valor (€)", "Tipo", "Descrição Fatura", "Nome Fatura", "Status Documento", "Arquivo"],
+      ...movsAtual.map(m => [
+        m.data,
+        m.descricao,
+        m.valor.toFixed(2).replace(".", ","),
+        m.tipo || "—",
+        m.descricaoFatura || "—",
+        m.nomeFatura || "—",
+        m.statusDoc === "conciliado" ? "✅ Conciliado" : m.statusDoc === "sem_doc" ? "❌ Falta Documento" : "—",
+        m.arquivoNome || "—",
+      ]),
+    ];
+    const csv = linhas.map(row =>
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(";")
+    ).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `relatorio-${mesAtual}-${anoAtual}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Relatório CSV exportado!");
+  }, [mesesSalvos, abaActiva]);
 
   // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
@@ -921,9 +1034,19 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {movimentos.length > 0 && (
+                    <Button variant="outline" size="sm" onClick={exportarCsv} className="text-xs h-7 gap-1 border-green-600 text-green-700 hover:bg-green-50" title="Exportar relatório CSV para contabilista">
+                      <Download className="w-3 h-3" /> Relatório CSV
+                    </Button>
+                  )}
                   {!finalizado && (
                     <>
+                      {movimentos.length > 0 && (
+                        <Button variant="outline" size="sm" onClick={() => pastaRef.current?.click()} className="text-xs h-7 gap-1 border-purple-500 text-purple-700 hover:bg-purple-50" title="Carregar pasta de faturas para conciliação automática">
+                          <FolderOpen className="w-3 h-3" /> Conciliar Faturas
+                        </Button>
+                      )}
                       {semTipo > 0 && (
                         <Button variant="outline" size="sm" onClick={preClassificarManual} className="text-xs h-7 gap-1 border-amber-400 text-amber-700 hover:bg-amber-50" title="Classificar automaticamente por palavras-chave">
                           <Wand2 className="w-3 h-3" /> Auto-classificar
@@ -937,6 +1060,15 @@ export default function Home() {
                       </Button>
                     </>
                   )}
+                  {/* Input oculto para selecção de pasta */}
+                  <input
+                    ref={pastaRef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    multiple
+                    className="hidden"
+                    onChange={onPastaChange}
+                  />
                 </div>
               </div>
 
@@ -950,6 +1082,7 @@ export default function Home() {
                       <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider w-52">Tipo</th>
                       <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider">Descrição Fatura</th>
                       <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider w-36">Nome Fatura</th>
+                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider w-24">Doc</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1013,6 +1146,27 @@ export default function Home() {
                                 placeholder="Nome..."
                                 className="w-full text-xs bg-transparent border-b-2 border-gray-300 focus:border-blue-500 outline-none py-0.5 text-gray-800 placeholder-gray-400 font-medium"
                               />
+                            )}
+                          </td>
+                          {/* COLUNA STATUS DOCUMENTO */}
+                          <td className="px-4 py-3 text-center">
+                            {mov.statusDoc === "conciliado" ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <span title={mov.arquivoNome} className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
+                                  <FileCheck2 className="w-3 h-3" /> OK
+                                </span>
+                                {mov.arquivoUrl && (
+                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
+                                    <ExternalLink className="w-2.5 h-2.5" /> Ver
+                                  </a>
+                                )}
+                              </div>
+                            ) : mov.statusDoc === "sem_doc" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">
+                                <FileX2 className="w-3 h-3" /> Falta
+                              </span>
+                            ) : (
+                              <span className="text-gray-300 text-xs">—</span>
                             )}
                           </td>
                         </tr>
