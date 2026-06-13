@@ -147,6 +147,8 @@ export async function upsertUserMes(userId: number, mes: string, ano: number, da
   movimentosJson: string;
   docGerado: string;
   finalizado: boolean;
+  documentosJson?: string;
+  correspondenciasJson?: string;
 }): Promise<void> {
   const db = await getDb();
   if (!db) return;

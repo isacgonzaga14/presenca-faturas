@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
+import PainelDocumentos from "@/components/PainelDocumentos";
 
 // ─── Constantes ────────────────────────────────────────────
 const MESES = [
@@ -37,12 +38,37 @@ const MES_ATUAL = MESES[new Date().getMonth()];
 const ANO_ATUAL = new Date().getFullYear();
 
 // ─── Tipos ─────────────────────────────────────────────────
+interface DadosDocumento {
+  tipo: "FATURA" | "RECIBO_VERDE";
+  numeroDocumento: string;
+  inst: string | null;
+  nomePrestador: string;
+  nomeCliente: string;
+  valor: number;
+  mesServico: string;
+  anoServico: number;
+  dataEmissao: string;
+  arquivoKey: string;
+  arquivoUrl: string;
+  arquivoNome: string;
+}
+
+interface Correspondencia {
+  docIdx: number;
+  movId: string;
+  confianca: "alta" | "media" | "baixa";
+  motivo: string;
+  confirmada: boolean;
+}
+
 interface EstadoMes {
   mes: string;
   ano: number;
   movimentos: Movimento[];
   docGerado: string;
   finalizado: boolean;
+  documentos: DadosDocumento[];
+  correspondencias: Correspondencia[];
 }
 
 interface Config {
@@ -371,17 +397,22 @@ export default function Home() {
 
   useEffect(() => {
     if (mesesData && mesesData.length > 0) {
-      setMesesSalvos(mesesData as EstadoMes[]);
+      const mesesComDocs = (mesesData as Array<EstadoMes & { documentos?: DadosDocumento[]; correspondencias?: Correspondencia[] }>).map(m => ({
+        ...m,
+        documentos: m.documentos ?? [],
+        correspondencias: m.correspondencias ?? [],
+      }));
+      setMesesSalvos(mesesComDocs);
       setAbaActiva(prev => {
-        const existe = mesesData.some((m: EstadoMes) => chave(m.mes, m.ano) === prev);
+        const existe = mesesComDocs.some(m => chave(m.mes, m.ano) === prev);
         if (!existe) {
-          const ultimo = mesesData[mesesData.length - 1] as EstadoMes;
+          const ultimo = mesesComDocs[mesesComDocs.length - 1];
           return chave(ultimo.mes, ultimo.ano);
         }
         return prev;
       });
     } else if (mesesData && mesesData.length === 0) {
-      setMesesSalvos([{ mes: MES_ATUAL, ano: ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false }]);
+      setMesesSalvos([{ mes: MES_ATUAL, ano: ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false, documentos: [], correspondencias: [] }]);
     }
   }, [mesesData]);
 
@@ -391,6 +422,8 @@ export default function Home() {
     movimentos: [],
     docGerado: "",
     finalizado: false,
+    documentos: [],
+    correspondencias: [],
   };
 
   const [mostrarDoc, setMostrarDoc] = useState(false);
@@ -414,6 +447,8 @@ export default function Home() {
         movimentosJson: JSON.stringify(estado.movimentos),
         docGerado: estado.docGerado,
         finalizado: estado.finalizado,
+        documentosJson: JSON.stringify(estado.documentos ?? []),
+        correspondenciasJson: JSON.stringify(estado.correspondencias ?? []),
       });
     }, 800); // debounce de 800ms
   }, [isAuthenticated, saveMesMutation]);
@@ -425,7 +460,7 @@ export default function Home() {
       let novoEstado: EstadoMes;
       if (idx === -1) {
         const [mes, anoStr] = abaActiva.split("-");
-        novoEstado = { mes, ano: parseInt(anoStr) || ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false, ...patch };
+        novoEstado = { mes, ano: parseInt(anoStr) || ANO_ATUAL, movimentos: [], docGerado: "", finalizado: false, documentos: [], correspondencias: [], ...patch };
         const novo = [...prev, novoEstado];
         guardarMesNoServidor(novoEstado);
         return novo;
@@ -599,6 +634,22 @@ export default function Home() {
     if (file) carregarFicheiro(file);
   };
 
+  // ─── Handler de correspondências (PainelDocumentos) ──────
+  const handleCorrespondenciasChange = useCallback((
+    correspondencias: Correspondencia[],
+    documentos: DadosDocumento[]
+  ) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novoEstado = { ...prev[idx], documentos, correspondencias };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+  }, [abaActiva, guardarMesNoServidor]);
+
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
     const file = e.dataTransfer.files?.[0];
@@ -651,7 +702,7 @@ export default function Home() {
     const k = chave(novoMesSel, novoAnoSel);
     const existe = mesesSalvos.some(m => chave(m.mes, m.ano) === k);
     if (existe) { setAbaActiva(k); setMostrarNovoMes(false); return; }
-    const novoEstado: EstadoMes = { mes: novoMesSel, ano: novoAnoSel, movimentos: [], docGerado: "", finalizado: false };
+    const novoEstado: EstadoMes = { mes: novoMesSel, ano: novoAnoSel, movimentos: [], docGerado: "", finalizado: false, documentos: [], correspondencias: [] };
     setMesesSalvos(prev => [...prev, novoEstado]);
     guardarMesNoServidor(novoEstado);
     setAbaActiva(k);
@@ -1203,6 +1254,22 @@ export default function Home() {
             </div>
           </>
         )}
+
+        {/* PAINEL DE DOCUMENTOS E CORRESPONDÊNCIAS */}
+        <PainelDocumentos
+          key={abaActiva}
+          movimentos={movimentos}
+          mes={mes}
+          ano={ano}
+          config={{
+            empresaNome: config.empresa.nome,
+            empresaNif: config.empresa.nif,
+            empresaMorada: config.empresa.morada,
+          }}
+          documentosGuardados={estadoActivo.documentos}
+          correspondenciasGuardadas={estadoActivo.correspondencias}
+          onCorrespondenciasChange={handleCorrespondenciasChange}
+        />
 
         {/* DOCUMENTO GERADO */}
         {docGerado && (
