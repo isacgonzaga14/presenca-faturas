@@ -547,6 +547,8 @@ export default function Home() {
   const movimentosFiltrados = useMemo(() => {
     if (filtroTipo === "TODOS") return movimentos;
     if (filtroTipo === "SEM_TIPO") return movimentos.filter(m => !m.tipo);
+    if (filtroTipo === "CONCILIADO") return movimentos.filter(m => m.statusDoc === "conciliado");
+    if (filtroTipo === "SEM_DOC") return movimentos.filter(m => m.statusDoc === "sem_doc");
     return movimentos.filter(m => m.tipo === filtroTipo);
   }, [movimentos, filtroTipo]);
 
@@ -1025,6 +1027,16 @@ export default function Home() {
                             Sem tipo ({movimentos.filter(m => !m.tipo).length})
                           </SelectItem>
                         )}
+                        {movimentos.some(m => m.statusDoc === "conciliado") && (
+                          <SelectItem value="CONCILIADO" className="text-xs text-green-700">
+                            ✅ Conciliados ({movimentos.filter(m => m.statusDoc === "conciliado").length})
+                          </SelectItem>
+                        )}
+                        {movimentos.some(m => m.statusDoc === "sem_doc") && (
+                          <SelectItem value="SEM_DOC" className="text-xs text-red-700">
+                            ❌ Falta Documento ({movimentos.filter(m => m.statusDoc === "sem_doc").length})
+                          </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     {filtroTipo !== "TODOS" && (
@@ -1033,6 +1045,24 @@ export default function Home() {
                       </span>
                     )}
                   </div>
+                  {/* RESUMO DE CONCILIAÇÃO */}
+                  {movimentos.some(m => m.statusDoc) && (() => {
+                    const conciliados = movimentos.filter(m => m.statusDoc === "conciliado").length;
+                    const semDoc = movimentos.filter(m => m.statusDoc === "sem_doc").length;
+                    const total = conciliados + semDoc;
+                    return (
+                      <div className="flex items-center gap-2 text-[10px] font-semibold">
+                        <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded flex items-center gap-1">
+                          <FileCheck2 className="w-3 h-3" /> {conciliados}/{total} conciliados
+                        </span>
+                        {semDoc > 0 && (
+                          <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1">
+                            <FileX2 className="w-3 h-3" /> {semDoc} em falta
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {movimentos.length > 0 && (
@@ -1073,16 +1103,16 @@ export default function Home() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full border-collapse" style={{fontSize: '11px'}}>
                   <thead>
                     <tr className="bg-[#0f2744] text-white">
-                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider w-28">Data</th>
-                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider">Descrição</th>
-                      <th className="text-right px-4 py-3 text-xs font-bold uppercase tracking-wider w-28">Valor</th>
-                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider w-52">Tipo</th>
-                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider">Descrição Fatura</th>
-                      <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider w-36">Nome Fatura</th>
-                      <th className="text-center px-4 py-3 text-xs font-bold uppercase tracking-wider w-24">Doc</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-24 border-r border-blue-900">Data</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-r border-blue-900">Descrição</th>
+                      <th className="text-right px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-24 border-r border-blue-900">Valor</th>
+                      <th className="text-center px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-44 border-r border-blue-900">Tipo</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-r border-blue-900">Desc. Fatura</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-32 border-r border-blue-900">Nome Fatura</th>
+                      <th className="text-center px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-20">Doc</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1090,24 +1120,24 @@ export default function Home() {
                       const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-white" : "bg-gray-50");
                       const badgeClass = TIPO_BADGE_CLASS[mov.tipo];
                       return (
-                        <tr key={mov.id} className={`border-b border-gray-200 transition-colors duration-100 ${rowClass}`}>
-                          <td className="px-4 py-3 font-mono text-xs text-gray-600 font-medium">{mov.data}</td>
-                          <td className="px-4 py-3">
-                            <div className="text-gray-900 text-xs leading-snug whitespace-normal break-words font-medium">
-                              {mov.descricao}
+                        <tr key={mov.id} className={`border-b border-gray-100 hover:brightness-95 transition-all duration-75 ${rowClass}`} style={{height: '28px'}}>
+                          <td className="px-2 py-0.5 font-mono text-[10px] text-gray-600 font-medium border-r border-gray-200 whitespace-nowrap">{mov.data}</td>
+                          <td className="px-2 py-0.5 border-r border-gray-200 max-w-[220px]">
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-900 text-[11px] font-medium truncate" title={mov.descricao}>{mov.descricao}</span>
+                              {mov.inst && (
+                                <span className="shrink-0 font-mono text-[9px] bg-blue-100 text-blue-800 px-1 py-0 rounded font-bold">
+                                  {mov.inst}
+                                </span>
+                              )}
                             </div>
-                            {mov.inst && (
-                              <span className="inline-block mt-0.5 font-mono text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-bold">
-                                INST {mov.inst}
-                              </span>
-                            )}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-sm text-red-700">
+                          <td className="px-2 py-0.5 text-right font-mono font-bold text-[11px] text-red-700 border-r border-gray-200 whitespace-nowrap">
                             {formatEur(mov.valor)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-1 py-0.5 border-r border-gray-200">
                             {finalizado ? (
-                              <span className={`text-xs font-semibold px-2 py-1 rounded ${badgeClass || "bg-gray-100 text-gray-600"}`}>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0 rounded ${badgeClass || "bg-gray-100 text-gray-600"}`}>
                                 {mov.tipo || "—"}
                               </span>
                             ) : (
@@ -1115,11 +1145,11 @@ export default function Home() {
                                 value={mov.tipo || "__none__"}
                                 onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
                               >
-                                <SelectTrigger className={`h-7 text-xs w-full font-semibold ${badgeClass || "bg-gray-100 text-gray-700 border-gray-300"}`}>
-                                  <SelectValue placeholder="— selecionar —" />
+                                <SelectTrigger className={`h-6 text-[10px] w-full font-semibold border-0 shadow-none ${badgeClass || "bg-gray-100 text-gray-700"}`}>
+                                  <SelectValue placeholder="— tipo —" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="__none__" className="text-xs text-gray-500">— selecionar —</SelectItem>
+                                  <SelectItem value="__none__" className="text-xs text-gray-500">— tipo —</SelectItem>
                                   {tiposActivos.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs font-medium">{t}</SelectItem>
                                   ))}
@@ -1127,16 +1157,16 @@ export default function Home() {
                               </Select>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-2 py-0.5 border-r border-gray-200 max-w-[180px]">
                             {mov.descricaoFatura ? (
-                              <div className="text-xs text-gray-700 italic leading-snug">{mov.descricaoFatura}</div>
+                              <span className="text-[10px] text-gray-700 italic truncate block" title={mov.descricaoFatura}>{mov.descricaoFatura}</span>
                             ) : (
-                              <span className="text-gray-400 text-xs">—</span>
+                              <span className="text-gray-300 text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-2 py-0.5 border-r border-gray-200">
                             {finalizado ? (
-                              <span className="text-xs text-gray-700">{mov.nomeFatura || "—"}</span>
+                              <span className="text-[10px] text-gray-700 truncate block" title={mov.nomeFatura}>{mov.nomeFatura || "—"}</span>
                             ) : (
                               <input
                                 type="text"
@@ -1144,29 +1174,29 @@ export default function Home() {
                                 onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
                                 onBlur={guardarNomeFatura}
                                 placeholder="Nome..."
-                                className="w-full text-xs bg-transparent border-b-2 border-gray-300 focus:border-blue-500 outline-none py-0.5 text-gray-800 placeholder-gray-400 font-medium"
+                                className="w-full text-[10px] bg-transparent border-b border-gray-300 focus:border-blue-500 outline-none text-gray-800 placeholder-gray-400"
                               />
                             )}
                           </td>
                           {/* COLUNA STATUS DOCUMENTO */}
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-1 py-0.5 text-center">
                             {mov.statusDoc === "conciliado" ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <span title={mov.arquivoNome} className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-1.5 py-0.5 rounded">
-                                  <FileCheck2 className="w-3 h-3" /> OK
+                              <div className="flex items-center justify-center gap-1">
+                                <span title={mov.arquivoNome} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-green-700 bg-green-100 px-1 py-0 rounded">
+                                  <FileCheck2 className="w-2.5 h-2.5" /> OK
                                 </span>
                                 {mov.arquivoUrl && (
-                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5">
-                                    <ExternalLink className="w-2.5 h-2.5" /> Ver
+                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title="Ver documento" className="text-blue-500 hover:text-blue-700">
+                                    <ExternalLink className="w-2.5 h-2.5" />
                                   </a>
                                 )}
                               </div>
                             ) : mov.statusDoc === "sem_doc" ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-100 px-1.5 py-0.5 rounded">
-                                <FileX2 className="w-3 h-3" /> Falta
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-700 bg-red-100 px-1 py-0 rounded">
+                                <FileX2 className="w-2.5 h-2.5" /> Falta
                               </span>
                             ) : (
-                              <span className="text-gray-300 text-xs">—</span>
+                              <span className="text-gray-200 text-[10px]">—</span>
                             )}
                           </td>
                         </tr>
