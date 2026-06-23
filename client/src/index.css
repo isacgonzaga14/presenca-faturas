@@ -33,57 +33,45 @@
 
 :root {
   --radius: 0.4rem;
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.18 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 250);
-  --primary: oklch(0.32 0.08 250);
+  /* Paleta escura profissional — base ardósia/azul-marinho */
+  --background: oklch(0.16 0.012 250);
+  --foreground: oklch(0.93 0.004 250);
+  --card: oklch(0.20 0.014 250);
+  --card-foreground: oklch(0.93 0.004 250);
+  --popover: oklch(0.20 0.014 250);
+  --popover-foreground: oklch(0.93 0.004 250);
+  --primary: oklch(0.62 0.13 250);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.94 0.005 250);
-  --secondary-foreground: oklch(0.32 0.08 250);
-  --muted: oklch(0.95 0.003 250);
-  --muted-foreground: oklch(0.52 0.015 250);
-  --accent: oklch(0.93 0.01 250);
-  --accent-foreground: oklch(0.18 0.02 250);
-  --destructive: oklch(0.58 0.22 25);
+  --secondary: oklch(0.26 0.016 250);
+  --secondary-foreground: oklch(0.90 0.006 250);
+  --muted: oklch(0.24 0.014 250);
+  --muted-foreground: oklch(0.66 0.012 250);
+  --accent: oklch(0.28 0.018 250);
+  --accent-foreground: oklch(0.93 0.004 250);
+  --destructive: oklch(0.62 0.21 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.005 250);
-  --input: oklch(0.88 0.005 250);
-  --ring: oklch(0.32 0.08 250);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.62 0.13 250);
 
-  /* Categoria cores */
-  --cat-fatura-bg: #bfdbfe;
-  --cat-fatura-fg: #0f2744;
-  --cat-fatura-border: #1d4ed8;
-  --cat-recibo-verde-bg: #bbf7d0;
-  --cat-recibo-verde-fg: #052e16;
-  --cat-recibo-verde-border: #15803d;
-  --cat-recibo-bg: #a7f3d0;
-  --cat-recibo-fg: #022c22;
-  --cat-recibo-border: #047857;
-  --cat-compra-bg: #fecaca;
-  --cat-compra-fg: #450a0a;
-  --cat-compra-border: #b91c1c;
-  --cat-manutencao-bg: #fef08a;
-  --cat-manutencao-fg: #422006;
-  --cat-manutencao-border: #a16207;
-  --cat-estado-bg: #fed7aa;
-  --cat-estado-fg: #431407;
-  --cat-estado-border: #c2410c;
-  --cat-avenca-bg: #e9d5ff;
-  --cat-avenca-fg: #2e1065;
-  --cat-avenca-border: #7e22ce;
-  --cat-seguro-bg: #fbcfe8;
-  --cat-seguro-fg: #4a0520;
-  --cat-seguro-border: #be185d;
-  --cat-salario-bg: #bae6fd;
-  --cat-salario-fg: #082f49;
-  --cat-salario-border: #0369a1;
-  --cat-recebimento-bg: #d1fae5;
-  --cat-recebimento-fg: #052e16;
-  --cat-recebimento-border: #059669;
+  --app-bg: #0a0e16;
+  --app-surface: #141b29;
+  --app-surface-alt: #11161f;
+  --app-header: #0f2744;
+  --app-header-accent: #2563eb;
+  --app-border: rgba(255,255,255,0.08);
+
+  /* Categoria cores — fundos escuros saturados, texto claro */
+  --cat-fatura-bg: #15314f;       --cat-fatura-fg: #bfdbfe;       --cat-fatura-border: #3b82f6;
+  --cat-recibo-verde-bg: #103a22; --cat-recibo-verde-fg: #bbf7d0; --cat-recibo-verde-border: #22c55e;
+  --cat-recibo-bg: #0d3b32;       --cat-recibo-fg: #a7f3d0;       --cat-recibo-border: #10b981;
+  --cat-compra-bg: #441616;       --cat-compra-fg: #fecaca;       --cat-compra-border: #ef4444;
+  --cat-manutencao-bg: #433714;   --cat-manutencao-fg: #fef08a;   --cat-manutencao-border: #ca8a04;
+  --cat-estado-bg: #432712;       --cat-estado-fg: #fed7aa;       --cat-estado-border: #ea580c;
+  --cat-avenca-bg: #321a4d;       --cat-avenca-fg: #e9d5ff;       --cat-avenca-border: #a855f7;
+  --cat-seguro-bg: #4a1530;       --cat-seguro-fg: #fbcfe8;       --cat-seguro-border: #ec4899;
+  --cat-salario-bg: #103349;      --cat-salario-fg: #bae6fd;      --cat-salario-border: #0ea5e9;
+  --cat-recebimento-bg: #0f3a2c;  --cat-recebimento-fg: #d1fae5;  --cat-recebimento-border: #10b981;
 }
 
 @layer base {
