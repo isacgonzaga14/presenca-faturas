@@ -7,6 +7,7 @@ import {
   getUserConfig, saveUserConfig,
   getUserMeses, upsertUserMes, deleteUserMes,
 } from "./db";
+import { storagePut } from "./storage";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -88,6 +89,24 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await deleteUserMes(ctx.user.id, input.mes, input.ano);
         return { success: true };
+      }),
+  }),
+
+  // ─── Ficheiros (conciliação de faturas) ───────────────────────────────────
+  ficheiros: router({
+    upload: protectedProcedure
+      .input(z.object({
+        nomeOriginal: z.string().min(1),
+        mimeType: z.string().min(1),
+        dadosBase64: z.string().min(1),
+        movId: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.dadosBase64, "base64");
+        const safeNome = input.nomeOriginal.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const key = `user-${ctx.user.id}/conciliacao/${input.movId ?? Date.now()}-${safeNome}`;
+        const { key: finalKey, url } = await storagePut(key, buffer, input.mimeType);
+        return { key: finalKey, url, nome: input.nomeOriginal };
       }),
   }),
 });
