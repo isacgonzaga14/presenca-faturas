@@ -163,35 +163,35 @@ function PainelConfig({
     <div className="space-y-6">
       {/* Empresa */}
       <div>
-        <h3 className="font-bold text-sm text-[#0f2744] mb-3 uppercase tracking-wide border-b border-gray-200 pb-2">
+        <h3 className="font-bold text-sm text-blue-100 mb-3 uppercase tracking-wide border-b border-white/10 pb-2">
           Dados da Empresa
         </h3>
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Nome da Empresa</label>
+            <label className="text-xs font-semibold text-slate-400 block mb-1">Nome da Empresa</label>
             <input
               type="text"
               value={empresa.nome}
               onChange={e => setEmpresa(p => ({ ...p, nome: e.target.value }))}
-              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-medium text-gray-800"
+              className="w-full text-sm border-2 border-white/15 rounded px-3 py-2 focus:border-blue-500 outline-none font-medium text-slate-200"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">NIF</label>
+            <label className="text-xs font-semibold text-slate-400 block mb-1">NIF</label>
             <input
               type="text"
               value={empresa.nif}
               onChange={e => setEmpresa(p => ({ ...p, nif: e.target.value }))}
-              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none font-mono text-gray-800"
+              className="w-full text-sm border-2 border-white/15 rounded px-3 py-2 focus:border-blue-500 outline-none font-mono text-slate-200"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Morada</label>
+            <label className="text-xs font-semibold text-slate-400 block mb-1">Morada</label>
             <input
               type="text"
               value={empresa.morada}
               onChange={e => setEmpresa(p => ({ ...p, morada: e.target.value }))}
-              className="w-full text-sm border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none text-gray-800"
+              className="w-full text-sm border-2 border-white/15 rounded px-3 py-2 focus:border-blue-500 outline-none text-slate-200"
             />
           </div>
         </div>
@@ -199,19 +199,19 @@ function PainelConfig({
 
       {/* Tipos de Movimento */}
       <div>
-        <h3 className="font-bold text-sm text-[#0f2744] mb-3 uppercase tracking-wide border-b border-gray-200 pb-2">
+        <h3 className="font-bold text-sm text-blue-100 mb-3 uppercase tracking-wide border-b border-white/10 pb-2">
           Tipos de Movimento
         </h3>
         <div className="space-y-1.5 mb-3 max-h-52 overflow-y-auto pr-1">
           {tipos.map(t => (
-            <div key={t} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-2">
+            <div key={t} className="flex items-center justify-between bg-[#11161f] border border-white/10 rounded px-3 py-2">
               <div className="flex items-center gap-2">
-                <GripVertical className="w-3.5 h-3.5 text-gray-400" />
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${BADGE_MAP[t] || "bg-gray-200 text-gray-700"}`}>{t}</span>
+                <GripVertical className="w-3.5 h-3.5 text-slate-500" />
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${BADGE_MAP[t] || "bg-[#232c3d] text-slate-300"}`}>{t}</span>
               </div>
               <button
                 onClick={() => removerTipo(t)}
-                className="text-red-400 hover:text-red-600 transition-colors p-0.5"
+                className="text-red-400 hover:text-red-400 transition-colors p-0.5"
                 title="Remover tipo"
               >
                 <X className="w-3.5 h-3.5" />
@@ -226,7 +226,7 @@ function PainelConfig({
             onChange={e => setNovoTipo(e.target.value)}
             onKeyDown={e => e.key === "Enter" && adicionarTipo()}
             placeholder="Novo tipo (ex: TRANSFERÊNCIA)..."
-            className="flex-1 text-xs border-2 border-gray-300 rounded px-3 py-2 focus:border-blue-500 outline-none uppercase placeholder-gray-400"
+            className="flex-1 text-xs border-2 border-white/15 rounded px-3 py-2 focus:border-blue-500 outline-none uppercase placeholder-gray-400"
           />
           <Button size="sm" onClick={adicionarTipo} className="h-9 text-xs bg-[#0f2744] hover:bg-[#1e3a5c] text-white gap-1">
             <Plus className="w-3 h-3" /> Adicionar
@@ -235,12 +235,12 @@ function PainelConfig({
       </div>
 
       {/* Acções */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-        <button onClick={repor} className="text-xs text-gray-500 hover:text-gray-700 underline">
+      <div className="flex items-center justify-between pt-2 border-t border-white/10">
+        <button onClick={repor} className="text-xs text-slate-400 hover:text-slate-200 underline">
           Repor valores padrão
         </button>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onClose} className="text-xs h-8 border-gray-300">
+          <Button variant="outline" size="sm" onClick={onClose} className="text-xs h-8 border-white/15">
             Cancelar
           </Button>
           <Button size="sm" onClick={guardar} className="text-xs h-8 bg-green-700 hover:bg-green-600 text-white gap-1">
@@ -255,7 +255,7 @@ function PainelConfig({
 // ─── Ecrã de Login ─────────────────────────────────────────
 function EcraLogin() {
   return (
-    <div className="min-h-screen bg-[#eef0f4] flex flex-col" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#0a0e16] flex flex-col" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
       <header className="bg-[#0f2744] text-white shadow-xl border-b-4 border-[#2563eb]">
         <div className="container py-4 flex items-center gap-3">
           <Building2 className="w-7 h-7 text-blue-400" />
@@ -266,12 +266,12 @@ function EcraLogin() {
         </div>
       </header>
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-10 max-w-sm w-full text-center">
+        <div className="bg-[#141b29] rounded-xl shadow-lg border border-white/10 p-10 max-w-sm w-full text-center">
           <div className="w-16 h-16 bg-[#0f2744] rounded-full flex items-center justify-center mx-auto mb-6">
             <Building2 className="w-8 h-8 text-blue-300" />
           </div>
-          <h2 className="text-xl font-bold text-[#0f2744] mb-2">Bem-vindo</h2>
-          <p className="text-gray-500 text-sm mb-8">
+          <h2 className="text-xl font-bold text-blue-100 mb-2">Bem-vindo</h2>
+          <p className="text-slate-400 text-sm mb-8">
             Faça login para aceder à sua conta e gerir os seus extratos bancários.
           </p>
           <a
@@ -281,7 +281,7 @@ function EcraLogin() {
             <LogIn className="w-4 h-4" />
             Entrar com a minha conta
           </a>
-          <p className="text-xs text-gray-400 mt-4">
+          <p className="text-xs text-slate-500 mt-4">
             Cada utilizador tem os seus próprios dados separados.
           </p>
         </div>
@@ -393,9 +393,36 @@ export default function Home() {
   const fileRef = useRef<HTMLInputElement>(null);
   const pastaRef = useRef<HTMLInputElement>(null);
   const [mostrarRelatorio, setMostrarRelatorio] = useState(false);
+  const uploadFicheiroMutation = trpc.ficheiros.upload.useMutation();
+  const [conciliando, setConciliando] = useState(false);
 
-  // ─── Conciliar PDFs por nome de ficheiro ───────────────────────
-  const conciliarPdfs = useCallback((files: FileList) => {
+  // ─── Guardar no servidor com debounce ────────────────────
+  const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
+    if (!isAuthenticated) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setEstadoGravacao("saving");
+    debounceRef.current = setTimeout(() => {
+      saveMesMutation.mutate({
+        mes: estado.mes,
+        ano: estado.ano,
+        movimentosJson: JSON.stringify(estado.movimentos),
+        docGerado: estado.docGerado,
+        finalizado: estado.finalizado,
+      });
+    }, 800); // debounce de 800ms
+  }, [isAuthenticated, saveMesMutation]);
+
+  // ─── Ler ficheiro como base64 (para upload persistente) ────────
+  const lerComoBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve((e.target?.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  // ─── Conciliar PDFs por nome de ficheiro (com upload persistente) ──
+  const conciliarPdfs = useCallback(async (files: FileList) => {
     if (!files.length) return;
     const pdfs = Array.from(files).filter(f =>
       f.name.toLowerCase().endsWith(".pdf") ||
@@ -405,18 +432,18 @@ export default function Home() {
     );
     if (pdfs.length === 0) { toast.error("Nenhum PDF ou imagem encontrado na pasta."); return; }
 
-    // Estratégia 1: INST no nome do ficheiro (ex: inst-163, INST163)
-    // Estratégia 2: valor no nome do ficheiro (ex: 480.00, 480,00)
     const movsActuais = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva)?.movimentos ?? [];
-    let ligacoes = 0;
+    setConciliando(true);
 
-    const novosMov = movsActuais.map(mov => {
-      if (mov.arquivoNome) return mov; // já tem arquivo ligado
-      const nomeLower = "";
+    const usados = new Set<string>();
+    const planoLigacoes: { movId: string; file: File }[] = [];
 
-      // Tenta por INST
+    for (const mov of movsActuais) {
+      if (mov.arquivoNome) continue;
+      let escolhido: File | undefined;
       if (mov.inst) {
-        const match = pdfs.find(f => {
+        escolhido = pdfs.find(f => {
+          if (usados.has(f.name)) return false;
           const n = f.name.toLowerCase();
           return n.includes(`inst-${mov.inst}`) ||
                  n.includes(`inst${mov.inst}`) ||
@@ -426,27 +453,53 @@ export default function Home() {
                  n.includes(`_${mov.inst}.`) ||
                  n.includes(`-${mov.inst}.`);
         });
-        if (match) {
-          ligacoes++;
-          const url = URL.createObjectURL(match);
-          return { ...mov, arquivoNome: match.name, arquivoUrl: url };
-        }
       }
-
-      // Tenta por valor (ex: 480.00 ou 480,00 no nome)
-      const valorStr = mov.valor.toFixed(2).replace(".", "[.,]");
-      const valorRe = new RegExp(valorStr);
-      const matchValor = pdfs.find(f => valorRe.test(f.name));
-      if (matchValor) {
-        ligacoes++;
-        const url = URL.createObjectURL(matchValor);
-        return { ...mov, arquivoNome: matchValor.name, arquivoUrl: url };
+      if (!escolhido) {
+        const valorStr = mov.valor.toFixed(2).replace(".", "[.,]");
+        const valorRe = new RegExp(valorStr);
+        escolhido = pdfs.find(f => !usados.has(f.name) && valorRe.test(f.name));
       }
+      if (escolhido) {
+        usados.add(escolhido.name);
+        planoLigacoes.push({ movId: mov.id, file: escolhido });
+      }
+    }
 
-      return mov;
+    if (planoLigacoes.length === 0) {
+      setConciliando(false);
+      toast.info(`${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} lido${pdfs.length !== 1 ? "s" : ""}. Nenhuma correspondência nova encontrada.`);
+      return;
+    }
+
+    toast.info(`A enviar ${planoLigacoes.length} ficheiro${planoLigacoes.length !== 1 ? "s" : ""}...`);
+
+    const ligacoesPorMovId = new Map<string, { arquivoNome: string; arquivoUrl: string; arquivoKey: string }>();
+    let falhas = 0;
+
+    for (const { movId, file } of planoLigacoes) {
+      try {
+        const dadosBase64 = await lerComoBase64(file);
+        const resultado = await uploadFicheiroMutation.mutateAsync({
+          nomeOriginal: file.name,
+          mimeType: file.type || "application/octet-stream",
+          dadosBase64,
+          movId,
+        });
+        ligacoesPorMovId.set(movId, {
+          arquivoNome: resultado.nome,
+          arquivoUrl: resultado.url,
+          arquivoKey: resultado.key,
+        });
+      } catch {
+        falhas++;
+      }
+    }
+
+    const novosMov = movsActuais.map(mov => {
+      const ligacao = ligacoesPorMovId.get(mov.id);
+      return ligacao ? { ...mov, ...ligacao } : mov;
     });
 
-    // Calcula status de cada movimento
     const movsComStatus = novosMov.map(m => ({
       ...m,
       statusDoc: m.arquivoNome
@@ -462,10 +515,18 @@ export default function Home() {
       const novoEstado = { ...prev[idx], movimentos: movsComStatus };
       const novo = [...prev];
       novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
       return novo;
     });
-    toast.success(`${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} lido${pdfs.length !== 1 ? "s" : ""}. ${ligacoes} correspondência${ligacoes !== 1 ? "s" : ""} encontrada${ligacoes !== 1 ? "s" : ""}.`);
-  }, [mesesSalvos, abaActiva]);
+
+    setConciliando(false);
+    const ligacoes = ligacoesPorMovId.size;
+    if (falhas > 0) {
+      toast.error(`${ligacoes} correspondência${ligacoes !== 1 ? "s" : ""} guardada${ligacoes !== 1 ? "s" : ""}. ${falhas} falhou${falhas !== 1 ? "ram" : ""} ao enviar — tente novamente.`);
+    } else {
+      toast.success(`${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} lido${pdfs.length !== 1 ? "s" : ""}. ${ligacoes} correspondência${ligacoes !== 1 ? "s" : ""} guardada${ligacoes !== 1 ? "s" : ""}.`);
+    }
+  }, [mesesSalvos, abaActiva, uploadFicheiroMutation, guardarMesNoServidor]);
 
   const onPastaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) conciliarPdfs(e.target.files);
@@ -503,22 +564,6 @@ export default function Home() {
     URL.revokeObjectURL(url);
     toast.success("Relatório CSV exportado!");
   }, [mesesSalvos, abaActiva]);
-
-  // ─── Guardar no servidor com debounce ────────────────────
-  const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
-    if (!isAuthenticated) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setEstadoGravacao("saving");
-    debounceRef.current = setTimeout(() => {
-      saveMesMutation.mutate({
-        mes: estado.mes,
-        ano: estado.ano,
-        movimentosJson: JSON.stringify(estado.movimentos),
-        docGerado: estado.docGerado,
-        finalizado: estado.finalizado,
-      });
-    }, 800); // debounce de 800ms
-  }, [isAuthenticated, saveMesMutation]);
 
   // ─── Actualizar mês activo ────────────────────────────────
   const actualizarMesActivo = useCallback((patch: Partial<EstadoMes>) => {
@@ -723,10 +768,10 @@ export default function Home() {
   // ─── Loading / Login ──────────────────────────────────────
   if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
     return (
-      <div className="min-h-screen bg-[#eef0f4] flex items-center justify-center" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+      <div className="min-h-screen bg-[#0a0e16] flex items-center justify-center" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
         <div className="text-center">
-          <div className="w-10 h-10 border-4 border-[#0f2744] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <div className="text-[#0f2744] font-semibold text-sm">A carregar...</div>
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="text-blue-100 font-semibold text-sm">A carregar...</div>
         </div>
       </div>
     );
@@ -745,7 +790,7 @@ export default function Home() {
         estadoGravacao === "saved"  ? "text-green-400" :
         "text-red-400"
       }`}>
-        {estadoGravacao === "saving" && <><div className="w-3 h-3 border-2 border-amber-300 border-t-transparent rounded-full animate-spin" /><span>A guardar...</span></>}
+        {estadoGravacao === "saving" && <><div className="w-3 h-3 border-2 border-amber-500/30 border-t-transparent rounded-full animate-spin" /><span>A guardar...</span></>}
         {estadoGravacao === "saved"  && <><Cloud className="w-3 h-3" /><span>Guardado ✓</span></>}
         {estadoGravacao === "error"  && <><CloudOff className="w-3 h-3" /><span>Erro ao guardar</span></>}
       </div>
@@ -754,7 +799,7 @@ export default function Home() {
 
   // ─── Render ───────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#eef0f4]" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#0a0e16]" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
 
       {/* HEADER */}
       <header className="bg-[#0f2744] text-white shadow-xl border-b-4 border-[#2563eb]">
@@ -809,7 +854,7 @@ export default function Home() {
                     onClick={() => { setAbaActiva(k); setMostrarDoc(false); setFiltroTipo("TODOS"); }}
                     className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-t-lg transition-all duration-150 capitalize
                       ${isActive
-                        ? "bg-[#eef0f4] text-[#0f2744] shadow-sm"
+                        ? "bg-[#0a0e16] text-blue-100 shadow-sm"
                         : isFinalizado
                           ? "bg-green-900/60 text-green-300 hover:bg-green-800/70 hover:text-green-100 border border-green-700/50"
                           : temDados
@@ -826,7 +871,7 @@ export default function Home() {
                     <span>{m.mes} {m.ano}</span>
                     {temDados && (
                       <span className={`text-[10px] font-mono px-1 rounded ${
-                        isActive ? "bg-blue-100 text-blue-700" :
+                        isActive ? "bg-blue-500/15 text-blue-300" :
                         isFinalizado ? "bg-green-800 text-green-300" :
                         "bg-blue-900 text-blue-300"
                       }`}>
@@ -875,7 +920,7 @@ export default function Home() {
                 {[2024,2025,2026,2027].map(a => <SelectItem key={a} value={String(a)} className="text-xs">{a}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button size="sm" onClick={adicionarNovoMes} className="h-7 text-xs bg-blue-600 hover:bg-blue-500">Adicionar</Button>
+            <Button size="sm" onClick={adicionarNovoMes} className="h-7 text-xs bg-blue-600 hover:bg-blue-500/150">Adicionar</Button>
             <button onClick={() => setMostrarNovoMes(false)} className="text-blue-300 hover:text-white text-xs ml-2">Cancelar</button>
           </div>
         </div>
@@ -886,19 +931,19 @@ export default function Home() {
         {/* INDICADOR DE MÊS ACTIVO */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-[#0f2744] capitalize">{mes} {ano}</h2>
+            <h2 className="text-lg font-bold text-blue-100 capitalize">{mes} {ano}</h2>
             {finalizado && (
-              <span className="flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 border border-green-300 px-2 py-0.5 rounded-full">
+              <span className="flex items-center gap-1 text-xs font-semibold text-green-300 bg-green-500/15 border border-green-500/30 px-2 py-0.5 rounded-full">
                 <CheckCircle2 className="w-3 h-3" /> Finalizado
               </span>
             )}
             {movimentos.length === 0 && !finalizado && (
-              <span className="text-xs text-gray-500 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
                 Aguardando extrato
               </span>
             )}
             {movimentos.length > 0 && semTipo > 0 && !finalizado && (
-              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
+              <span className="text-xs text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
                 {semTipo} sem tipo
               </span>
             )}
@@ -917,18 +962,18 @@ export default function Home() {
             <div
               className={`flex-1 border-2 border-dashed rounded-lg p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-150
                 ${finalizado ? "opacity-50 pointer-events-none" : ""}
-                ${dragging ? "border-blue-500 bg-blue-50" : "border-gray-400 bg-white hover:border-blue-500 hover:bg-blue-50/40"}`}
+                ${dragging ? "border-blue-500 bg-blue-500/15" : "border-white/20 bg-[#141b29] hover:border-blue-500 hover:bg-blue-500/10"}`}
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
               onClick={() => fileRef.current?.click()}
             >
-              <Upload className={`w-8 h-8 ${dragging ? "text-blue-500" : "text-gray-500"}`} />
+              <Upload className={`w-8 h-8 ${dragging ? "text-blue-400" : "text-slate-400"}`} />
               <div className="text-center">
-                <div className="font-semibold text-gray-800 text-sm">Carregar Extrato</div>
-                <div className="text-gray-500 text-xs mt-1">Arraste ou clique · .xlsx do BPI</div>
+                <div className="font-semibold text-slate-200 text-sm">Carregar Extrato</div>
+                <div className="text-slate-400 text-xs mt-1">Arraste ou clique · .xlsx do BPI</div>
                 {movimentos.length > 0 && (
-                  <div className="text-blue-600 text-xs mt-1 font-medium">Substitui os dados actuais</div>
+                  <div className="text-blue-400 text-xs mt-1 font-medium">Substitui os dados actuais</div>
                 )}
               </div>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
@@ -936,7 +981,7 @@ export default function Home() {
             {movimentos.length > 0 && !finalizado && (
               <button
                 onClick={limparDados}
-                className="w-full flex items-center justify-center gap-2 text-xs text-red-600 font-medium border border-red-300 rounded-lg py-2 hover:bg-red-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 text-xs text-red-400 font-medium border border-red-500/30 rounded-lg py-2 hover:bg-red-500/10 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Limpar dados
@@ -946,14 +991,14 @@ export default function Home() {
 
           <div className="col-span-3 grid grid-cols-3 gap-3">
             {[
-              { label: "Total GERAR FATURA", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#0f2744", bg: "#dbeafe" },
-              { label: "Valor Base (÷ 1,23)", value: formatEur(baseTotal), sub: "Sem IVA", color: "#1d4ed8", bg: "#eff6ff" },
-              { label: "10% do Valor Base", value: formatEur(dezPct), sub: "Referência comissão", color: "#15803d", bg: "#f0fdf4" },
+              { label: "Total GERAR FATURA", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#60a5fa", bg: "#15314f" },
+              { label: "Valor Base (÷ 1,23)", value: formatEur(baseTotal), sub: "Sem IVA", color: "#60a5fa", bg: "#11203a" },
+              { label: "10% do Valor Base", value: formatEur(dezPct), sub: "Referência comissão", color: "#4ade80", bg: "#103a22" },
             ].map(({ label, value, sub, color, bg }) => (
-              <div key={label} className="rounded-lg p-4 shadow-sm border border-gray-200" style={{ background: bg, borderTop: `4px solid ${color}` }}>
-                <div className="text-xs text-gray-600 font-semibold uppercase tracking-wide">{label}</div>
+              <div key={label} className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: bg, borderTop: `4px solid ${color}` }}>
+                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide">{label}</div>
                 <div className="font-mono font-bold text-2xl mt-1" style={{ color }}>{value}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{sub}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{sub}</div>
               </div>
             ))}
           </div>
@@ -961,27 +1006,27 @@ export default function Home() {
 
         {/* Sem dados */}
         {movimentos.length === 0 && (
-          <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-            <Upload className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <div className="text-gray-600 font-semibold">Nenhum extrato carregado</div>
-            <div className="text-gray-400 text-sm mt-1">Carregue o ficheiro .xlsx do BPI para começar</div>
+          <div className="bg-[#141b29] border-2 border-dashed border-white/15 rounded-lg p-12 text-center">
+            <Upload className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+            <div className="text-slate-400 font-semibold">Nenhum extrato carregado</div>
+            <div className="text-slate-500 text-sm mt-1">Carregue o ficheiro .xlsx do BPI para começar</div>
           </div>
         )}
 
         {movimentos.length > 0 && (
           <>
             {/* RESUMO POR TIPO */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-                <span className="font-bold text-sm text-gray-800">Resumo por Tipo</span>
-                <span className="text-xs text-gray-500 font-mono bg-gray-200 px-2 py-0.5 rounded">{totalClassificados} / {movimentos.length} classificados</span>
+            <div className="bg-[#141b29] rounded-lg shadow-sm border border-white/10 overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-[#11161f]">
+                <span className="font-bold text-sm text-slate-200">Resumo por Tipo</span>
+                <span className="text-xs text-slate-400 font-mono bg-[#232c3d] px-2 py-0.5 rounded">{totalClassificados} / {movimentos.length} classificados</span>
               </div>
               <div className="flex flex-wrap gap-2 p-4">
                 {tiposActivos.map(tipo => {
                   const total = totalPorTipo(movimentos, tipo);
                   const count = movimentos.filter(m => m.tipo === tipo).length;
                   if (count === 0) return null;
-                  const badgeClass = BADGE_MAP[tipo] || "bg-gray-200 text-gray-700";
+                  const badgeClass = BADGE_MAP[tipo] || "bg-[#232c3d] text-slate-300";
                   return (
                     <div key={tipo} className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold ${badgeClass}`}>
                       <span>{tipo}</span>
@@ -991,7 +1036,7 @@ export default function Home() {
                   );
                 })}
                 {movimentos.filter(m => !m.tipo).length > 0 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold bg-gray-200 text-gray-700">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold bg-[#232c3d] text-slate-300">
                     <span>Sem tipo</span>
                     <span className="font-mono">{movimentos.filter(m => !m.tipo).length}</span>
                   </div>
@@ -1000,15 +1045,15 @@ export default function Home() {
             </div>
 
             {/* TABELA */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-gray-50 flex-wrap gap-2">
+            <div className="bg-[#141b29] rounded-lg shadow-sm border border-white/10 overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-[#11161f] flex-wrap gap-2">
                 <div className="flex items-center gap-3">
-                  <span className="font-bold text-sm text-gray-800">Movimentos do Extrato</span>
+                  <span className="font-bold text-sm text-slate-200">Movimentos do Extrato</span>
                   {/* FILTRO POR TIPO */}
                   <div className="flex items-center gap-1.5">
-                    <Filter className="w-3.5 h-3.5 text-gray-500" />
+                    <Filter className="w-3.5 h-3.5 text-slate-400" />
                     <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-                      <SelectTrigger className="h-7 text-xs w-44 border-gray-300 bg-white text-gray-700">
+                      <SelectTrigger className="h-7 text-xs w-44 border-white/15 bg-[#141b29] text-slate-300">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1023,24 +1068,24 @@ export default function Home() {
                           );
                         })}
                         {movimentos.filter(m => !m.tipo).length > 0 && (
-                          <SelectItem value="SEM_TIPO" className="text-xs text-gray-500">
+                          <SelectItem value="SEM_TIPO" className="text-xs text-slate-400">
                             Sem tipo ({movimentos.filter(m => !m.tipo).length})
                           </SelectItem>
                         )}
                         {movimentos.some(m => m.statusDoc === "conciliado") && (
-                          <SelectItem value="CONCILIADO" className="text-xs text-green-700">
+                          <SelectItem value="CONCILIADO" className="text-xs text-green-300">
                             ✅ Conciliados ({movimentos.filter(m => m.statusDoc === "conciliado").length})
                           </SelectItem>
                         )}
                         {movimentos.some(m => m.statusDoc === "sem_doc") && (
-                          <SelectItem value="SEM_DOC" className="text-xs text-red-700">
+                          <SelectItem value="SEM_DOC" className="text-xs text-red-300">
                             ❌ Falta Documento ({movimentos.filter(m => m.statusDoc === "sem_doc").length})
                           </SelectItem>
                         )}
                       </SelectContent>
                     </Select>
                     {filtroTipo !== "TODOS" && (
-                      <span className="text-xs text-blue-600 font-semibold bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                      <span className="text-xs text-blue-400 font-semibold bg-blue-500/15 border border-blue-500/30 px-2 py-0.5 rounded">
                         {movimentosFiltrados.length} linha{movimentosFiltrados.length !== 1 ? "s" : ""}
                       </span>
                     )}
@@ -1052,11 +1097,11 @@ export default function Home() {
                     const total = conciliados + semDoc;
                     return (
                       <div className="flex items-center gap-2 text-[10px] font-semibold">
-                        <span className="text-green-700 bg-green-100 px-2 py-0.5 rounded flex items-center gap-1">
+                        <span className="text-green-300 bg-green-500/15 px-2 py-0.5 rounded flex items-center gap-1">
                           <FileCheck2 className="w-3 h-3" /> {conciliados}/{total} conciliados
                         </span>
                         {semDoc > 0 && (
-                          <span className="text-red-700 bg-red-100 px-2 py-0.5 rounded flex items-center gap-1">
+                          <span className="text-red-300 bg-red-500/15 px-2 py-0.5 rounded flex items-center gap-1">
                             <FileX2 className="w-3 h-3" /> {semDoc} em falta
                           </span>
                         )}
@@ -1066,23 +1111,25 @@ export default function Home() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {movimentos.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={exportarCsv} className="text-xs h-7 gap-1 border-green-600 text-green-700 hover:bg-green-50" title="Exportar relatório CSV para contabilista">
+                    <Button variant="outline" size="sm" onClick={exportarCsv} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório CSV para contabilista">
                       <Download className="w-3 h-3" /> Relatório CSV
                     </Button>
                   )}
                   {!finalizado && (
                     <>
                       {movimentos.length > 0 && (
-                        <Button variant="outline" size="sm" onClick={() => pastaRef.current?.click()} className="text-xs h-7 gap-1 border-purple-500 text-purple-700 hover:bg-purple-50" title="Carregar pasta de faturas para conciliação automática">
-                          <FolderOpen className="w-3 h-3" /> Conciliar Faturas
+                        <Button variant="outline" size="sm" disabled={conciliando} onClick={() => pastaRef.current?.click()} className="text-xs h-7 gap-1 border-purple-500 text-purple-300 hover:bg-purple-500/10" title="Carregar PDFs/imagens de faturas para conciliação automática">
+                          {conciliando
+                            ? <><div className="w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" /> A conciliar...</>
+                            : <><FolderOpen className="w-3 h-3" /> Conciliar Faturas</>}
                         </Button>
                       )}
                       {semTipo > 0 && (
-                        <Button variant="outline" size="sm" onClick={preClassificarManual} className="text-xs h-7 gap-1 border-amber-400 text-amber-700 hover:bg-amber-50" title="Classificar automaticamente por palavras-chave">
+                        <Button variant="outline" size="sm" onClick={preClassificarManual} className="text-xs h-7 gap-1 border-amber-400 text-amber-300 hover:bg-amber-500/10" title="Classificar automaticamente por palavras-chave">
                           <Wand2 className="w-3 h-3" /> Auto-classificar
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={limparDados} className="text-xs h-7 gap-1 border-gray-300 text-gray-700 hover:bg-gray-100">
+                      <Button variant="outline" size="sm" onClick={limparDados} className="text-xs h-7 gap-1 border-white/15 text-slate-300 hover:bg-white/5">
                         <RotateCcw className="w-3 h-3" /> Limpar
                       </Button>
                       <Button size="sm" onClick={gerarDocumento} className="text-xs h-7 gap-1 bg-[#0f2744] hover:bg-[#1e3a5c] text-white">
@@ -1117,27 +1164,27 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {movimentosFiltrados.map((mov, i) => {
-                      const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-white" : "bg-gray-50");
+                      const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-[#141b29]" : "bg-[#11161f]");
                       const badgeClass = TIPO_BADGE_CLASS[mov.tipo];
                       return (
-                        <tr key={mov.id} className={`border-b border-gray-100 hover:brightness-95 transition-all duration-75 ${rowClass}`} style={{height: '28px'}}>
-                          <td className="px-2 py-0.5 font-mono text-[10px] text-gray-600 font-medium border-r border-gray-200 whitespace-nowrap">{mov.data}</td>
-                          <td className="px-2 py-0.5 border-r border-gray-200 max-w-[220px]">
+                        <tr key={mov.id} className={`border-b border-white/5 hover:brightness-95 transition-all duration-75 ${rowClass}`} style={{height: '28px'}}>
+                          <td className="px-2 py-0.5 font-mono text-[10px] text-slate-400 font-medium border-r border-white/10 whitespace-nowrap">{mov.data}</td>
+                          <td className="px-2 py-0.5 border-r border-white/10 max-w-[220px]">
                             <div className="flex items-center gap-1">
-                              <span className="text-gray-900 text-[11px] font-medium truncate" title={mov.descricao}>{mov.descricao}</span>
+                              <span className="text-slate-100 text-[11px] font-medium truncate" title={mov.descricao}>{mov.descricao}</span>
                               {mov.inst && (
-                                <span className="shrink-0 font-mono text-[9px] bg-blue-100 text-blue-800 px-1 py-0 rounded font-bold">
+                                <span className="shrink-0 font-mono text-[9px] bg-blue-500/15 text-blue-300 px-1 py-0 rounded font-bold">
                                   {mov.inst}
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-2 py-0.5 text-right font-mono font-bold text-[11px] text-red-700 border-r border-gray-200 whitespace-nowrap">
+                          <td className="px-2 py-0.5 text-right font-mono font-bold text-[11px] text-red-300 border-r border-white/10 whitespace-nowrap">
                             {formatEur(mov.valor)}
                           </td>
-                          <td className="px-1 py-0.5 border-r border-gray-200">
+                          <td className="px-1 py-0.5 border-r border-white/10">
                             {finalizado ? (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0 rounded ${badgeClass || "bg-gray-100 text-gray-600"}`}>
+                              <span className={`text-[10px] font-semibold px-1.5 py-0 rounded ${badgeClass || "bg-[#1c2433] text-slate-400"}`}>
                                 {mov.tipo || "—"}
                               </span>
                             ) : (
@@ -1145,11 +1192,11 @@ export default function Home() {
                                 value={mov.tipo || "__none__"}
                                 onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
                               >
-                                <SelectTrigger className={`h-6 text-[10px] w-full font-semibold border-0 shadow-none ${badgeClass || "bg-gray-100 text-gray-700"}`}>
+                                <SelectTrigger className={`h-6 text-[10px] w-full font-semibold border-0 shadow-none ${badgeClass || "bg-[#1c2433] text-slate-300"}`}>
                                   <SelectValue placeholder="— tipo —" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="__none__" className="text-xs text-gray-500">— tipo —</SelectItem>
+                                  <SelectItem value="__none__" className="text-xs text-slate-400">— tipo —</SelectItem>
                                   {tiposActivos.map(t => (
                                     <SelectItem key={t} value={t} className="text-xs font-medium">{t}</SelectItem>
                                   ))}
@@ -1157,16 +1204,16 @@ export default function Home() {
                               </Select>
                             )}
                           </td>
-                          <td className="px-2 py-0.5 border-r border-gray-200 max-w-[180px]">
+                          <td className="px-2 py-0.5 border-r border-white/10 max-w-[180px]">
                             {mov.descricaoFatura ? (
-                              <span className="text-[10px] text-gray-700 italic truncate block" title={mov.descricaoFatura}>{mov.descricaoFatura}</span>
+                              <span className="text-[10px] text-slate-300 italic truncate block" title={mov.descricaoFatura}>{mov.descricaoFatura}</span>
                             ) : (
-                              <span className="text-gray-300 text-[10px]">—</span>
+                              <span className="text-slate-600 text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="px-2 py-0.5 border-r border-gray-200">
+                          <td className="px-2 py-0.5 border-r border-white/10">
                             {finalizado ? (
-                              <span className="text-[10px] text-gray-700 truncate block" title={mov.nomeFatura}>{mov.nomeFatura || "—"}</span>
+                              <span className="text-[10px] text-slate-300 truncate block" title={mov.nomeFatura}>{mov.nomeFatura || "—"}</span>
                             ) : (
                               <input
                                 type="text"
@@ -1174,7 +1221,7 @@ export default function Home() {
                                 onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
                                 onBlur={guardarNomeFatura}
                                 placeholder="Nome..."
-                                className="w-full text-[10px] bg-transparent border-b border-gray-300 focus:border-blue-500 outline-none text-gray-800 placeholder-gray-400"
+                                className="w-full text-[10px] bg-transparent border-b border-white/15 focus:border-blue-500 outline-none text-slate-200 placeholder-gray-400"
                               />
                             )}
                           </td>
@@ -1182,21 +1229,21 @@ export default function Home() {
                           <td className="px-1 py-0.5 text-center">
                             {mov.statusDoc === "conciliado" ? (
                               <div className="flex items-center justify-center gap-1">
-                                <span title={mov.arquivoNome} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-green-700 bg-green-100 px-1 py-0 rounded">
+                                <span title={mov.arquivoNome} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-green-300 bg-green-500/15 px-1 py-0 rounded">
                                   <FileCheck2 className="w-2.5 h-2.5" /> OK
                                 </span>
                                 {mov.arquivoUrl && (
-                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title="Ver documento" className="text-blue-500 hover:text-blue-700">
+                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title="Ver documento" className="text-blue-400 hover:text-blue-300">
                                     <ExternalLink className="w-2.5 h-2.5" />
                                   </a>
                                 )}
                               </div>
                             ) : mov.statusDoc === "sem_doc" ? (
-                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-700 bg-red-100 px-1 py-0 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-300 bg-red-500/15 px-1 py-0 rounded">
                                 <FileX2 className="w-2.5 h-2.5" /> Falta
                               </span>
                             ) : (
-                              <span className="text-gray-200 text-[10px]">—</span>
+                              <span className="text-slate-300 text-[10px]">—</span>
                             )}
                           </td>
                         </tr>
@@ -1205,7 +1252,7 @@ export default function Home() {
                   </tbody>
                 </table>
                 {movimentosFiltrados.length === 0 && filtroTipo !== "TODOS" && (
-                  <div className="text-center py-8 text-gray-400 text-sm">
+                  <div className="text-center py-8 text-slate-500 text-sm">
                     Nenhum movimento com o tipo "{filtroTipo === "SEM_TIPO" ? "Sem tipo" : filtroTipo}"
                   </div>
                 )}
@@ -1216,9 +1263,9 @@ export default function Home() {
 
         {/* DOCUMENTO GERADO */}
         {docGerado && (
-          <div className="bg-white rounded-lg shadow-sm border-2 border-[#0f2744] overflow-hidden">
+          <div className="bg-[#141b29] rounded-lg shadow-sm border-2 border-blue-900/50 overflow-hidden">
             <div
-              className="px-4 py-3 border-b border-gray-200 flex items-center justify-between cursor-pointer bg-[#0f2744]"
+              className="px-4 py-3 border-b border-white/10 flex items-center justify-between cursor-pointer bg-[#0f2744]"
               onClick={() => setMostrarDoc(!mostrarDoc)}
             >
               <div className="flex items-center gap-2">
@@ -1235,7 +1282,7 @@ export default function Home() {
             </div>
             {mostrarDoc && (
               <div className="p-4">
-                <pre className="font-mono text-xs text-gray-800 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded p-4 border border-gray-200">
+                <pre className="font-mono text-xs text-slate-200 whitespace-pre-wrap leading-relaxed bg-[#11161f] rounded p-4 border border-white/10">
                   {docGerado}
                 </pre>
               </div>
@@ -1249,7 +1296,7 @@ export default function Home() {
       <Dialog open={mostrarConfig} onOpenChange={setMostrarConfig}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#0f2744]">
+            <DialogTitle className="flex items-center gap-2 text-blue-100">
               <Settings className="w-4 h-4" />
               Configurações
             </DialogTitle>
