@@ -25,9 +25,10 @@ export interface Movimento {
   descricaoFatura: string;
   nomeFatura: string;
   inst?: string;
-  // Conciliação: arquivo PDF ligado ao movimento
-  arquivoNome?: string;   // nome do ficheiro PDF
-  arquivoUrl?: string;    // URL blob local para visualizar
+  // Conciliação: arquivo PDF ligado ao movimento (persistido em S3)
+  arquivoNome?: string;   // nome original do ficheiro
+  arquivoUrl?: string;    // URL persistente (/manus-storage/{key})
+  arquivoKey?: string;    // chave S3 (para referência/limpeza futura)
   statusDoc?: "conciliado" | "sem_doc"; // calculado dinamicamente
 }
 
