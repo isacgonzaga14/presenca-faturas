@@ -395,6 +395,8 @@ export default function Home() {
   const [mostrarRelatorio, setMostrarRelatorio] = useState(false);
   const uploadFicheiroMutation = trpc.ficheiros.upload.useMutation();
   const [conciliando, setConciliando] = useState(false);
+  const [uploadManualId, setUploadManualId] = useState<string | null>(null);
+  const uploadManualRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
@@ -497,7 +499,7 @@ export default function Home() {
 
     const novosMov = movsActuais.map(mov => {
       const ligacao = ligacoesPorMovId.get(mov.id);
-      return ligacao ? { ...mov, ...ligacao } : mov;
+      return ligacao ? { ...mov, ...ligacao, nomeFatura: ligacao.arquivoNome } : mov;
     });
 
     const movsComStatus = novosMov.map(m => ({
@@ -632,6 +634,11 @@ export default function Home() {
       return novo;
     });
   }, [abaActiva]);
+
+  // Quando a conciliação automática liga um arquivo, sincroniza nomeFatura com arquivoNome
+  // (já feito no upload manual; aqui garantimos que a conciliação em lote também sincroniza)
+  // Nota: a lógica de conciliarPdfs já define arquivoNome; o nomeFatura é preenchido
+  // pelo upload manual. Para a conciliação automática, sincronizamos abaixo:
 
   const guardarNomeFatura = useCallback(() => {
     const estado = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
@@ -1154,12 +1161,11 @@ export default function Home() {
                   <thead>
                     <tr className="bg-[#0f2744] text-white">
                       <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-24 border-r border-blue-900">Data</th>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-r border-blue-900">Descrição</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-r border-blue-900" style={{minWidth:'220px'}}>Descrição</th>
                       <th className="text-right px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-24 border-r border-blue-900">Valor</th>
                       <th className="text-center px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-44 border-r border-blue-900">Tipo</th>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider border-r border-blue-900">Desc. Fatura</th>
-                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-32 border-r border-blue-900">Nome Fatura</th>
-                      <th className="text-center px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-20">Doc</th>
+                      <th className="text-left px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-40 border-r border-blue-900">Nome Fatura</th>
+                      <th className="text-center px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider w-24">Doc</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1169,11 +1175,11 @@ export default function Home() {
                       return (
                         <tr key={mov.id} className={`border-b border-white/5 hover:brightness-95 transition-all duration-75 ${rowClass}`} style={{height: '28px'}}>
                           <td className="px-2 py-0.5 font-mono text-[10px] text-slate-400 font-medium border-r border-white/10 whitespace-nowrap">{mov.data}</td>
-                          <td className="px-2 py-0.5 border-r border-white/10 max-w-[220px]">
-                            <div className="flex items-center gap-1">
-                              <span className="text-slate-100 text-[11px] font-medium truncate" title={mov.descricao}>{mov.descricao}</span>
+                          <td className="px-2 py-0.5 border-r border-white/10" style={{minWidth:'220px',maxWidth:'320px'}}>
+                            <div className="flex items-start gap-1">
+                              <span className="text-slate-100 text-[11px] font-medium break-words leading-tight" style={{wordBreak:'break-word',whiteSpace:'normal'}}>{mov.descricao}</span>
                               {mov.inst && (
-                                <span className="shrink-0 font-mono text-[9px] bg-blue-500/15 text-blue-300 px-1 py-0 rounded font-bold">
+                                <span className="shrink-0 font-mono text-[9px] bg-blue-500/15 text-blue-300 px-1 py-0 rounded font-bold mt-0.5">
                                   {mov.inst}
                                 </span>
                               )}
@@ -1204,47 +1210,96 @@ export default function Home() {
                               </Select>
                             )}
                           </td>
-                          <td className="px-2 py-0.5 border-r border-white/10 max-w-[180px]">
-                            {mov.descricaoFatura ? (
-                              <span className="text-[10px] text-slate-300 italic truncate block" title={mov.descricaoFatura}>{mov.descricaoFatura}</span>
+                          <td className="px-2 py-0.5 border-r border-white/10 w-40">
+                            {mov.arquivoNome ? (
+                              <div className="flex items-center gap-1">
+                                {mov.arquivoUrl ? (
+                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title={mov.arquivoNome} className="text-[10px] text-blue-300 hover:text-blue-200 truncate block max-w-[130px] underline">
+                                    {mov.arquivoNome}
+                                  </a>
+                                ) : (
+                                  <span className="text-[10px] text-slate-300 truncate block max-w-[130px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-slate-600 text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="px-2 py-0.5 border-r border-white/10">
-                            {finalizado ? (
-                              <span className="text-[10px] text-slate-300 truncate block" title={mov.nomeFatura}>{mov.nomeFatura || "—"}</span>
-                            ) : (
-                              <input
-                                type="text"
-                                value={mov.nomeFatura}
-                                onChange={e => atualizarNomeFatura(mov.id, e.target.value)}
-                                onBlur={guardarNomeFatura}
-                                placeholder="Nome..."
-                                className="w-full text-[10px] bg-transparent border-b border-white/15 focus:border-blue-500 outline-none text-slate-200 placeholder-gray-400"
-                              />
-                            )}
-                          </td>
-                          {/* COLUNA STATUS DOCUMENTO */}
-                          <td className="px-1 py-0.5 text-center">
-                            {mov.statusDoc === "conciliado" ? (
-                              <div className="flex items-center justify-center gap-1">
+                          {/* COLUNA DOC — status + upload manual */}
+                          <td className="px-1 py-0.5 text-center w-24">
+                            <div className="flex items-center justify-center gap-1">
+                              {mov.arquivoNome ? (
                                 <span title={mov.arquivoNome} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-green-300 bg-green-500/15 px-1 py-0 rounded">
                                   <FileCheck2 className="w-2.5 h-2.5" /> OK
                                 </span>
-                                {mov.arquivoUrl && (
-                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title="Ver documento" className="text-blue-400 hover:text-blue-300">
-                                    <ExternalLink className="w-2.5 h-2.5" />
-                                  </a>
-                                )}
-                              </div>
-                            ) : mov.statusDoc === "sem_doc" ? (
-                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-300 bg-red-500/15 px-1 py-0 rounded">
-                                <FileX2 className="w-2.5 h-2.5" /> Falta
-                              </span>
-                            ) : (
-                              <span className="text-slate-300 text-[10px]">—</span>
-                            )}
+                              ) : mov.statusDoc === "sem_doc" ? (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-red-300 bg-red-500/15 px-1 py-0 rounded">
+                                  <FileX2 className="w-2.5 h-2.5" /> Falta
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 text-[10px]">—</span>
+                              )}
+                              {!finalizado && (
+                                <>
+                                  <button
+                                    onClick={() => uploadManualRefs.current[mov.id]?.click()}
+                                    disabled={uploadManualId === mov.id}
+                                    title={mov.arquivoNome ? "Substituir ficheiro" : "Anexar ficheiro"}
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded bg-[#1e3a5c] hover:bg-[#2a4f7c] text-blue-300 hover:text-blue-200 transition-colors disabled:opacity-50"
+                                  >
+                                    {uploadManualId === mov.id
+                                      ? <div className="w-2.5 h-2.5 border border-blue-300 border-t-transparent rounded-full animate-spin" />
+                                      : <Paperclip className="w-2.5 h-2.5" />}
+                                  </button>
+                                  <input
+                                    ref={el => { uploadManualRefs.current[mov.id] = el; }}
+                                    type="file"
+                                    accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls"
+                                    className="hidden"
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      setUploadManualId(mov.id);
+                                      try {
+                                        const dadosBase64 = await lerComoBase64(file);
+                                        const resultado = await uploadFicheiroMutation.mutateAsync({
+                                          nomeOriginal: file.name,
+                                          mimeType: file.type || "application/octet-stream",
+                                          dadosBase64,
+                                          movId: mov.id,
+                                        });
+                                        setMesesSalvos(prev => {
+                                          const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+                                          if (idx === -1) return prev;
+                                          const novosMov = prev[idx].movimentos.map(m => {
+                                            if (m.id !== mov.id) return m;
+                                            return {
+                                              ...m,
+                                              arquivoNome: resultado.nome,
+                                              arquivoUrl: resultado.url,
+                                              arquivoKey: resultado.key,
+                                              nomeFatura: resultado.nome,
+                                              statusDoc: "conciliado" as const,
+                                            };
+                                          });
+                                          const novoEstado = { ...prev[idx], movimentos: novosMov };
+                                          const novo = [...prev];
+                                          novo[idx] = novoEstado;
+                                          guardarMesNoServidor(novoEstado);
+                                          return novo;
+                                        });
+                                        toast.success(`Ficheiro "${resultado.nome}" anexado!`);
+                                      } catch {
+                                        toast.error("Erro ao enviar o ficheiro. Tente novamente.");
+                                      } finally {
+                                        setUploadManualId(null);
+                                        if (uploadManualRefs.current[mov.id]) uploadManualRefs.current[mov.id]!.value = "";
+                                      }
+                                    }}
+                                  />
+                                </>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
