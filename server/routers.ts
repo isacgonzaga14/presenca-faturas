@@ -7,7 +7,8 @@ import {
   getUserConfig, saveUserConfig,
   getUserMeses, upsertUserMes, deleteUserMes,
 } from "./db";
-import { storagePut } from "./storage";
+import { storagePut, storageGetSignedUrl } from "./storage";
+import { invokeLLM } from "./_core/llm";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -107,6 +108,223 @@ export const appRouter = router({
         const key = `user-${ctx.user.id}/conciliacao/${input.movId ?? Date.now()}-${safeNome}`;
         const { key: finalKey, url } = await storagePut(key, buffer, input.mimeType);
         return { key: finalKey, url, nome: input.nomeOriginal };
+      }),
+
+    // ─── Conciliação inteligente por IA ───────────────────────────────────
+    // Recebe vários PDFs em base64 + lista de movimentos do mês
+    // A IA lê o conteúdo de cada PDF e devolve a correspondência com o movimento certo
+    conciliarComIA: protectedProcedure
+      .input(z.object({
+        ficheiros: z.array(z.object({
+          nomeOriginal: z.string(),
+          mimeType: z.string(),
+          dadosBase64: z.string(),
+        })),
+        movimentos: z.array(z.object({
+          id: z.string(),
+          data: z.string(),
+          descricao: z.string(),
+          valor: z.number(),
+          tipo: z.string(),
+          inst: z.string().optional(),
+          arquivoNome: z.string().optional(), // já tem doc? ignorar
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Filtrar movimentos que ainda não têm documento
+        const semDoc = input.movimentos.filter(m => !m.arquivoNome);
+        if (semDoc.length === 0) return { ligacoes: [], semCorrespondencia: [] };
+
+        // Para cada PDF: fazer upload para S3 e obter URL pública assinada
+        type FicheiroInfo = {
+          nomeOriginal: string;
+          mimeType: string;
+          key: string;
+          url: string;
+          signedUrl: string;
+        };
+        const ficheiroInfos: FicheiroInfo[] = [];
+        for (const f of input.ficheiros) {
+          const buffer = Buffer.from(f.dadosBase64, "base64");
+          const safeNome = f.nomeOriginal.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const key = `user-${ctx.user.id}/conciliacao/ia-${Date.now()}-${safeNome}`;
+          const { key: finalKey, url } = await storagePut(key, buffer, f.mimeType);
+          // Obter URL assinada para a IA conseguir ler o ficheiro
+          const signedUrl = await storageGetSignedUrl(finalKey);
+          ficheiroInfos.push({
+            nomeOriginal: f.nomeOriginal,
+            mimeType: f.mimeType,
+            key: finalKey,
+            url,
+            signedUrl,
+          });
+        }
+
+        // Construir prompt para a IA
+        const movimentosTexto = semDoc.map((m, i) =>
+          `[${i}] ID=${m.id} | Data=${m.data} | Valor=${m.valor.toFixed(2)}€ | Tipo=${m.tipo} | INST=${m.inst ?? "—"} | Desc=${m.descricao}`
+        ).join("\n");
+
+        const ficheiroTexto = ficheiroInfos.map((f, i) =>
+          `[${i}] Nome=${f.nomeOriginal}`
+        ).join("\n");
+
+        // Mensagem com os PDFs como file_url
+        const contentParts: Array<{ type: string; text?: string; file_url?: { url: string; mime_type: string } }> = [
+          {
+            type: "text",
+            text: `És um assistente de conciliação contabilística. Vais analisar documentos (faturas, recibos, comprovativos) e fazer a correspondência com movimentos bancários.
+
+MOVIMENTOS DO EXTRATO (sem documento associado):
+${movimentosTexto}
+
+FICHEIROS CARREGADOS:
+${ficheiroTexto}
+
+Para cada ficheiro, lê o seu conteúdo e identifica:
+- Valor total do documento
+- Data do documento
+- Nome/NIF do emitente ou destinatário
+- Número de referência (INST, fatura, recibo)
+
+Depois faz a correspondência com o movimento mais provável da lista acima.
+
+Regras:
+- Cada ficheiro só pode ser ligado a UM movimento
+- Cada movimento só pode receber UM ficheiro
+- Se não houver correspondência clara, não forças — deixa sem correspondência
+- A correspondência por VALOR é o critério mais forte (diferença máxima de 0.02€)
+- A correspondência por INST/referência é o segundo critério mais forte
+- A correspondência por data e nome é o terceiro critério
+
+Responde APENAS com JSON válido neste formato exacto:
+{
+  "ligacoes": [
+    { "ficheiroIndex": 0, "movimentoId": "mov-3", "confianca": "alta", "motivo": "valor 1179.49€ e INST 198 coincidem" }
+  ],
+  "semCorrespondencia": [1, 2]
+}
+
+Os ficheiros são fornecidos a seguir.`,
+          },
+        ];
+
+        // Adicionar cada PDF como file_url
+        for (const f of ficheiroInfos) {
+          contentParts.push({
+            type: "file_url",
+            file_url: {
+              url: f.signedUrl,
+              mime_type: "application/pdf",
+            },
+          } as any);
+        }
+
+        // Chamar a IA
+        let iaResposta: { ligacoes: Array<{ ficheiroIndex: number; movimentoId: string; confianca: string; motivo: string }>; semCorrespondencia: number[] };
+        try {
+          const resultado = await invokeLLM({
+            messages: [
+              {
+                role: "user",
+                content: contentParts as any,
+              },
+            ],
+            response_format: { type: "json_object" },
+          });
+          const texto = typeof resultado.choices[0].message.content === "string"
+            ? resultado.choices[0].message.content
+            : JSON.stringify(resultado.choices[0].message.content);
+          iaResposta = JSON.parse(texto);
+        } catch (e) {
+          throw new Error(`Erro na análise por IA: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
+        // Construir resultado com URLs dos ficheiros
+        const ligacoesComUrl = (iaResposta.ligacoes ?? []).map(l => {
+          const f = ficheiroInfos[l.ficheiroIndex];
+          return {
+            movimentoId: l.movimentoId,
+            arquivoNome: f?.nomeOriginal ?? "",
+            arquivoUrl: f?.url ?? "",
+            arquivoKey: f?.key ?? "",
+            confianca: l.confianca,
+            motivo: l.motivo,
+          };
+        }).filter(l => l.movimentoId && l.arquivoNome);
+
+        const semCorrespondenciaNomes = (iaResposta.semCorrespondencia ?? []).map(
+          i => ficheiroInfos[i]?.nomeOriginal ?? `ficheiro-${i}`
+        );
+
+        return {
+          ligacoes: ligacoesComUrl,
+          semCorrespondencia: semCorrespondenciaNomes,
+        };
+      }),
+  }),
+
+  // ─── Relatório para o contabilista ───────────────────────────────────────
+  relatorio: router({
+    gerarExcel: protectedProcedure
+      .input(z.object({
+        mes: z.string(),
+        ano: z.number(),
+        movimentos: z.array(z.object({
+          data: z.string(),
+          descricao: z.string(),
+          valor: z.number(),
+          tipo: z.string(),
+          nomeFatura: z.string().optional(),
+          arquivoNome: z.string().optional(),
+          arquivoUrl: z.string().optional(),
+          statusDoc: z.string().optional(),
+        })),
+        empresaNome: z.string(),
+        empresaNif: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Gerar CSV estruturado (compatível com Excel)
+        const linhas: string[] = [];
+        const sep = ";";
+
+        // Cabeçalho do relatório
+        linhas.push(`RELATÓRIO DE CONCILIAÇÃO CONTABILÍSTICA${sep}${sep}${sep}${sep}${sep}`);
+        linhas.push(`Empresa:${sep}${input.empresaNome}${sep}${sep}${sep}${sep}`);
+        linhas.push(`NIF:${sep}${input.empresaNif}${sep}${sep}${sep}${sep}`);
+        linhas.push(`Período:${sep}${input.mes.charAt(0).toUpperCase() + input.mes.slice(1)} ${input.ano}${sep}${sep}${sep}${sep}`);
+        linhas.push(`Gerado em:${sep}${new Date().toLocaleDateString("pt-PT")}${sep}${sep}${sep}${sep}`);
+        linhas.push(`${sep}${sep}${sep}${sep}${sep}`);
+
+        // Cabeçalho da tabela
+        linhas.push(`DATA${sep}DESCRIÇÃO${sep}VALOR (€)${sep}TIPO${sep}DOCUMENTO${sep}STATUS`);
+
+        // Linhas de movimentos
+        for (const m of input.movimentos) {
+          const valor = m.valor.toFixed(2).replace(".", ",");
+          const doc = m.arquivoNome ?? m.nomeFatura ?? "—";
+          const status = m.statusDoc === "conciliado" ? "✓ Conciliado"
+            : m.statusDoc === "sem_doc" ? "⚠ Sem documento"
+            : "—";
+          // Escapar ponto e vírgula nos campos de texto
+          const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
+          linhas.push(`${m.data}${sep}${esc(m.descricao)}${sep}${valor}${sep}${esc(m.tipo)}${sep}${esc(doc)}${sep}${esc(status)}`);
+        }
+
+        // Totais
+        const totalGeral = input.movimentos.reduce((s, m) => s + m.valor, 0);
+        const conciliados = input.movimentos.filter(m => m.statusDoc === "conciliado").length;
+        const semDoc = input.movimentos.filter(m => m.statusDoc === "sem_doc").length;
+        linhas.push(`${sep}${sep}${sep}${sep}${sep}`);
+        linhas.push(`${sep}TOTAL${sep}${totalGeral.toFixed(2).replace(".", ",")}${sep}${sep}${sep}`);
+        linhas.push(`${sep}Conciliados${sep}${conciliados}${sep}${sep}${sep}`);
+        linhas.push(`${sep}Sem documento${sep}${semDoc}${sep}${sep}${sep}`);
+
+        const csvContent = linhas.join("\n");
+        const buffer = Buffer.from("\uFEFF" + csvContent, "utf-8"); // BOM para Excel reconhecer UTF-8
+        const key = `user-${ctx.user.id}/relatorios/relatorio-${input.mes}-${input.ano}-${Date.now()}.csv`;
+        const { url } = await storagePut(key, buffer, "text/csv;charset=utf-8");
+        return { url, nome: `relatorio-conciliacao-${input.mes}-${input.ano}.csv` };
       }),
   }),
 });

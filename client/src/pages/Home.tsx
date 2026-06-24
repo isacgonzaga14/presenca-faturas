@@ -398,6 +398,18 @@ export default function Home() {
   const [uploadManualId, setUploadManualId] = useState<string | null>(null);
   const uploadManualRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // ─── Conciliação por IA ─────────────────────────────────────
+  const [mostrarModalIA, setMostrarModalIA] = useState(false);
+  const [iaProgresso, setIaProgresso] = useState<string>("");
+  const [iaResultado, setIaResultado] = useState<{
+    ligacoes: Array<{ movimentoId: string; arquivoNome: string; arquivoUrl: string; arquivoKey: string; confianca: string; motivo: string }>;
+    semCorrespondencia: string[];
+  } | null>(null);
+  const [conciliandoIA, setConciliandoIA] = useState(false);
+  const pastaIARef = useRef<HTMLInputElement>(null);
+  const conciliarComIAMutation = trpc.ficheiros.conciliarComIA.useMutation();
+  const gerarRelatorioMutation = trpc.relatorio.gerarExcel.useMutation();
+
   // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
     if (!isAuthenticated) return;
@@ -534,6 +546,124 @@ export default function Home() {
     if (e.target.files) conciliarPdfs(e.target.files);
     if (pastaRef.current) pastaRef.current.value = "";
   };
+
+  // ─── Conciliação por IA ───────────────────────────────────────
+  const iniciarConciliacaoIA = useCallback(async (files: FileList) => {
+    if (!files.length) return;
+    const pdfs = Array.from(files).filter(f =>
+      f.name.toLowerCase().endsWith(".pdf") ||
+      f.name.toLowerCase().endsWith(".png") ||
+      f.name.toLowerCase().endsWith(".jpg") ||
+      f.name.toLowerCase().endsWith(".jpeg")
+    );
+    if (pdfs.length === 0) { toast.error("Nenhum PDF ou imagem encontrado."); return; }
+
+    const movsActuais = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva)?.movimentos ?? [];
+    setConciliandoIA(true);
+    setIaResultado(null);
+    setMostrarModalIA(true);
+    setIaProgresso(`A preparar ${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} para análise...`);
+
+    try {
+      // Converter todos os ficheiros para base64
+      const ficheirosDados = await Promise.all(pdfs.map(async (f) => ({
+        nomeOriginal: f.name,
+        mimeType: f.type || "application/pdf",
+        dadosBase64: await lerComoBase64(f),
+      })));
+
+      setIaProgresso(`A enviar ${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} para a IA analisar...`);
+
+      const resultado = await conciliarComIAMutation.mutateAsync({
+        ficheiros: ficheirosDados,
+        movimentos: movsActuais.map(m => ({
+          id: m.id,
+          data: m.data,
+          descricao: m.descricao,
+          valor: m.valor,
+          tipo: m.tipo,
+          inst: m.inst,
+          arquivoNome: m.arquivoNome,
+        })),
+      });
+
+      setIaResultado(resultado);
+      setIaProgresso("");
+
+      // Aplicar as ligações automaticamente
+      if (resultado.ligacoes.length > 0) {
+        const ligMap = new Map(resultado.ligacoes.map(l => [l.movimentoId, l]));
+        setMesesSalvos(prev => {
+          const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+          if (idx === -1) return prev;
+          const novosMov = prev[idx].movimentos.map(m => {
+            const lig = ligMap.get(m.id);
+            if (!lig) return m;
+            return {
+              ...m,
+              arquivoNome: lig.arquivoNome,
+              arquivoUrl: lig.arquivoUrl,
+              arquivoKey: lig.arquivoKey,
+              nomeFatura: lig.arquivoNome,
+              statusDoc: "conciliado" as const,
+            };
+          });
+          const novoEstado = { ...prev[idx], movimentos: novosMov };
+          const novo = [...prev];
+          novo[idx] = novoEstado;
+          guardarMesNoServidor(novoEstado);
+          return novo;
+        });
+        toast.success(`IA ligou ${resultado.ligacoes.length} documento${resultado.ligacoes.length !== 1 ? "s" : ""} a movimentos!`);
+      } else {
+        toast.info("A IA não encontrou correspondências automáticas.");
+      }
+    } catch (err) {
+      setIaProgresso("");
+      toast.error(`Erro na conciliação por IA: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+    } finally {
+      setConciliandoIA(false);
+      if (pastaIARef.current) pastaIARef.current.value = "";
+    }
+  }, [mesesSalvos, abaActiva, conciliarComIAMutation, lerComoBase64, guardarMesNoServidor]);
+
+  const onPastaIAChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) iniciarConciliacaoIA(e.target.files);
+    if (pastaIARef.current) pastaIARef.current.value = "";
+  };
+
+  // ─── Relatório para contabilista (via servidor) ────────────────────────
+  const exportarRelatorioServidor = useCallback(async () => {
+    const estadoAtual = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
+    const movsAtual = estadoAtual?.movimentos ?? [];
+    if (movsAtual.length === 0) { toast.error("Sem movimentos para exportar."); return; }
+    try {
+      const resultado = await gerarRelatorioMutation.mutateAsync({
+        mes: estadoAtual?.mes ?? "",
+        ano: estadoAtual?.ano ?? ANO_ATUAL,
+        movimentos: movsAtual.map(m => ({
+          data: m.data,
+          descricao: m.descricao,
+          valor: m.valor,
+          tipo: m.tipo,
+          nomeFatura: m.nomeFatura,
+          arquivoNome: m.arquivoNome,
+          arquivoUrl: m.arquivoUrl,
+          statusDoc: m.statusDoc,
+        })),
+        empresaNome: config.empresa.nome,
+        empresaNif: config.empresa.nif,
+      });
+      // Download directo
+      const a = document.createElement("a");
+      a.href = resultado.url;
+      a.download = resultado.nome;
+      a.click();
+      toast.success("Relatório exportado!");
+    } catch (err) {
+      toast.error(`Erro ao gerar relatório: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
+    }
+  }, [mesesSalvos, abaActiva, gerarRelatorioMutation, config]);
 
   // ─── Exportar relatório CSV para contabilista ─────────────
   const exportarCsv = useCallback(() => {
@@ -1118,18 +1248,29 @@ export default function Home() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {movimentos.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={exportarCsv} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório CSV para contabilista">
-                      <Download className="w-3 h-3" /> Relatório CSV
+                    <Button variant="outline" size="sm" disabled={gerarRelatorioMutation.isPending} onClick={exportarRelatorioServidor} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório de conciliação para o contabilista (Excel/CSV)">
+                      {gerarRelatorioMutation.isPending
+                        ? <><div className="w-3 h-3 border-2 border-green-300 border-t-transparent rounded-full animate-spin" /> A gerar...</>
+                        : <><Download className="w-3 h-3" /> Relatório Contabilista</>}
                     </Button>
                   )}
                   {!finalizado && (
                     <>
                       {movimentos.length > 0 && (
-                        <Button variant="outline" size="sm" disabled={conciliando} onClick={() => pastaRef.current?.click()} className="text-xs h-7 gap-1 border-purple-500 text-purple-300 hover:bg-purple-500/10" title="Carregar PDFs/imagens de faturas para conciliação automática">
-                          {conciliando
-                            ? <><div className="w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" /> A conciliar...</>
-                            : <><FolderOpen className="w-3 h-3" /> Conciliar Faturas</>}
-                        </Button>
+                        <>
+                          {/* Botão Conciliar com IA */}
+                          <Button variant="outline" size="sm" disabled={conciliandoIA || conciliando} onClick={() => pastaIARef.current?.click()} className="text-xs h-7 gap-1 border-blue-400 text-blue-300 hover:bg-blue-500/10" title="Conciliação inteligente: a IA lê o conteúdo dos PDFs e liga automaticamente ao movimento certo">
+                            {conciliandoIA
+                              ? <><div className="w-3 h-3 border-2 border-blue-300 border-t-transparent rounded-full animate-spin" /> IA a analisar...</>
+                              : <><Wand2 className="w-3 h-3" /> Conciliar c/ IA</>}
+                          </Button>
+                          {/* Botão Conciliar clássico (por nome de ficheiro) */}
+                          <Button variant="outline" size="sm" disabled={conciliando || conciliandoIA} onClick={() => pastaRef.current?.click()} className="text-xs h-7 gap-1 border-purple-500 text-purple-300 hover:bg-purple-500/10" title="Conciliação por nome de ficheiro (rápida)">
+                            {conciliando
+                              ? <><div className="w-3 h-3 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" /> A conciliar...</>
+                              : <><FolderOpen className="w-3 h-3" /> Conciliar</>}
+                          </Button>
+                        </>
                       )}
                       {semTipo > 0 && (
                         <Button variant="outline" size="sm" onClick={preClassificarManual} className="text-xs h-7 gap-1 border-amber-400 text-amber-300 hover:bg-amber-500/10" title="Classificar automaticamente por palavras-chave">
@@ -1144,7 +1285,7 @@ export default function Home() {
                       </Button>
                     </>
                   )}
-                  {/* Input oculto para selecção de pasta */}
+                  {/* Input oculto para conciliação clássica */}
                   <input
                     ref={pastaRef}
                     type="file"
@@ -1152,6 +1293,15 @@ export default function Home() {
                     multiple
                     className="hidden"
                     onChange={onPastaChange}
+                  />
+                  {/* Input oculto para conciliação por IA */}
+                  <input
+                    ref={pastaIARef}
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    multiple
+                    className="hidden"
+                    onChange={onPastaIAChange}
                   />
                 </div>
               </div>
@@ -1361,6 +1511,88 @@ export default function Home() {
             onSave={salvarConfig}
             onClose={() => setMostrarConfig(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL RESULTADO CONCILIAÇÃO IA */}
+      <Dialog open={mostrarModalIA} onOpenChange={v => { if (!conciliandoIA) setMostrarModalIA(v); }}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto bg-[#141b29] border border-blue-500/30">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-100">
+              <Wand2 className="w-4 h-4 text-blue-400" />
+              Conciliação Inteligente por IA
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Estado: a processar */}
+          {conciliandoIA && (
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              <p className="text-blue-200 text-sm text-center">{iaProgresso || "A analisar documentos..."}</p>
+              <p className="text-slate-400 text-xs text-center">A IA está a ler o conteúdo de cada PDF e a cruzar com os movimentos do extrato. Pode demorar alguns segundos.</p>
+            </div>
+          )}
+
+          {/* Resultado */}
+          {!conciliandoIA && iaResultado && (
+            <div className="space-y-4">
+              {/* Ligações encontradas */}
+              {iaResultado.ligacoes.length > 0 ? (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileCheck2 className="w-4 h-4 text-green-400" />
+                    <span className="text-sm font-semibold text-green-300">{iaResultado.ligacoes.length} correspondência{iaResultado.ligacoes.length !== 1 ? "s" : ""} encontrada{iaResultado.ligacoes.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {iaResultado.ligacoes.map((l, i) => {
+                      const mov = movimentos.find(m => m.id === l.movimentoId);
+                      return (
+                        <div key={i} className="bg-green-900/20 border border-green-500/30 rounded p-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] text-green-200 font-semibold truncate">{l.arquivoNome}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 truncate">{mov?.data} — {mov?.descricao?.slice(0, 60)}</p>
+                              <p className="text-[10px] text-slate-300 mt-0.5">{mov?.valor?.toFixed(2)}€</p>
+                            </div>
+                            <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                              l.confianca === "alta" ? "bg-green-500/20 text-green-300 border border-green-500/40" :
+                              l.confianca === "média" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" :
+                              "bg-slate-500/20 text-slate-300 border border-slate-500/40"
+                            }`}>{l.confianca}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1 italic">{l.motivo}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded p-3">
+                  <FileX2 className="w-4 h-4 shrink-0" />
+                  <span className="text-sm">A IA não encontrou correspondências automáticas. Tenta ajustar os nomes dos ficheiros ou usa o upload manual por linha.</span>
+                </div>
+              )}
+
+              {/* Ficheiros sem correspondência */}
+              {iaResultado.semCorrespondencia.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileX2 className="w-4 h-4 text-red-400" />
+                    <span className="text-sm font-semibold text-red-300">{iaResultado.semCorrespondencia.length} ficheiro{iaResultado.semCorrespondencia.length !== 1 ? "s" : ""} sem correspondência</span>
+                  </div>
+                  <div className="space-y-1">
+                    {iaResultado.semCorrespondencia.map((nome, i) => (
+                      <div key={i} className="text-[11px] text-slate-400 bg-slate-800/50 border border-white/10 rounded px-2 py-1">{nome}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Button onClick={() => setMostrarModalIA(false)} className="w-full text-xs h-8 bg-blue-700 hover:bg-blue-600 text-white">
+                Fechar
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
