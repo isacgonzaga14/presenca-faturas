@@ -61,17 +61,26 @@
   --app-header-accent: #2563eb;
   --app-border: rgba(255,255,255,0.08);
 
-  /* Categoria cores — fundos escuros saturados, texto claro */
-  --cat-fatura-bg: #15314f;       --cat-fatura-fg: #bfdbfe;       --cat-fatura-border: #3b82f6;
-  --cat-recibo-verde-bg: #103a22; --cat-recibo-verde-fg: #bbf7d0; --cat-recibo-verde-border: #22c55e;
-  --cat-recibo-bg: #0d3b32;       --cat-recibo-fg: #a7f3d0;       --cat-recibo-border: #10b981;
-  --cat-compra-bg: #441616;       --cat-compra-fg: #fecaca;       --cat-compra-border: #ef4444;
-  --cat-manutencao-bg: #433714;   --cat-manutencao-fg: #fef08a;   --cat-manutencao-border: #ca8a04;
-  --cat-estado-bg: #432712;       --cat-estado-fg: #fed7aa;       --cat-estado-border: #ea580c;
-  --cat-avenca-bg: #321a4d;       --cat-avenca-fg: #e9d5ff;       --cat-avenca-border: #a855f7;
-  --cat-seguro-bg: #4a1530;       --cat-seguro-fg: #fbcfe8;       --cat-seguro-border: #ec4899;
-  --cat-salario-bg: #103349;      --cat-salario-fg: #bae6fd;      --cat-salario-border: #0ea5e9;
-  --cat-recebimento-bg: #0f3a2c;  --cat-recebimento-fg: #d1fae5;  --cat-recebimento-border: #10b981;
+  /* ─── Paleta de categorias — 9 tipos, cores distintas e coerentes ───
+     Azul     → FATURA       (receita principal, destaque máximo)
+     Vermelho → COMPRA       (saída/despesa)
+     Verde    → RECIBO VERDE (recibo externo, verde claro)
+     Ciano    → RECIBO       (recibo interno, ciano)
+     Âmbar    → MANUT. CONTA (custo fixo bancário)
+     Roxo     → AVENÇA CONT. (serviço contabilidade)
+     Esmeralda→ RECEBIMENTO  (entrada de dinheiro)
+     Laranja  → SEG. SOCIAL  (obrigação fiscal/social)
+     Rosa     → IVA          (imposto)
+  */
+  --cat-fatura-bg: #0f2a4a;        --cat-fatura-fg: #93c5fd;        --cat-fatura-border: #3b82f6;
+  --cat-compra-bg: #3b1111;        --cat-compra-fg: #fca5a5;        --cat-compra-border: #ef4444;
+  --cat-recibo-verde-bg: #0a2e18;  --cat-recibo-verde-fg: #86efac;  --cat-recibo-verde-border: #22c55e;
+  --cat-recibo-bg: #082e38;        --cat-recibo-fg: #67e8f9;        --cat-recibo-border: #06b6d4;
+  --cat-manutencao-bg: #3a2e08;    --cat-manutencao-fg: #fde68a;    --cat-manutencao-border: #d97706;
+  --cat-avenca-bg: #2a1245;        --cat-avenca-fg: #d8b4fe;        --cat-avenca-border: #9333ea;
+  --cat-recebimento-bg: #063a20;   --cat-recebimento-fg: #6ee7b7;   --cat-recebimento-border: #10b981;
+  --cat-seg-social-bg: #3d1c06;    --cat-seg-social-fg: #fdba74;    --cat-seg-social-border: #f97316;
+  --cat-iva-bg: #3b0a2a;           --cat-iva-fg: #f9a8d4;           --cat-iva-border: #ec4899;
 }
 
 @layer base {
@@ -112,25 +121,23 @@
 
   /* Linha colorida por categoria */
   .row-fatura        { background-color: var(--cat-fatura-bg) !important; border-left: 3px solid var(--cat-fatura-border) !important; }
+  .row-compra        { background-color: var(--cat-compra-bg) !important; border-left: 3px solid var(--cat-compra-border) !important; }
   .row-recibo-verde  { background-color: var(--cat-recibo-verde-bg) !important; border-left: 3px solid var(--cat-recibo-verde-border) !important; }
   .row-recibo        { background-color: var(--cat-recibo-bg) !important; border-left: 3px solid var(--cat-recibo-border) !important; }
-  .row-compra        { background-color: var(--cat-compra-bg) !important; border-left: 3px solid var(--cat-compra-border) !important; }
   .row-manutencao    { background-color: var(--cat-manutencao-bg) !important; border-left: 3px solid var(--cat-manutencao-border) !important; }
-  .row-estado        { background-color: var(--cat-estado-bg) !important; border-left: 3px solid var(--cat-estado-border) !important; }
   .row-avenca        { background-color: var(--cat-avenca-bg) !important; border-left: 3px solid var(--cat-avenca-border) !important; }
-  .row-seguro        { background-color: var(--cat-seguro-bg) !important; border-left: 3px solid var(--cat-seguro-border) !important; }
-  .row-salario       { background-color: var(--cat-salario-bg) !important; border-left: 3px solid var(--cat-salario-border) !important; }
   .row-recebimento   { background-color: var(--cat-recebimento-bg) !important; border-left: 3px solid var(--cat-recebimento-border) !important; }
+  .row-seg-social    { background-color: var(--cat-seg-social-bg) !important; border-left: 3px solid var(--cat-seg-social-border) !important; }
+  .row-iva           { background-color: var(--cat-iva-bg) !important; border-left: 3px solid var(--cat-iva-border) !important; }
 
   /* Badge por categoria */
   .badge-fatura        { background: var(--cat-fatura-bg); color: var(--cat-fatura-fg); border: 1px solid var(--cat-fatura-border); }
+  .badge-compra        { background: var(--cat-compra-bg); color: var(--cat-compra-fg); border: 1px solid var(--cat-compra-border); }
   .badge-recibo-verde  { background: var(--cat-recibo-verde-bg); color: var(--cat-recibo-verde-fg); border: 1px solid var(--cat-recibo-verde-border); }
   .badge-recibo        { background: var(--cat-recibo-bg); color: var(--cat-recibo-fg); border: 1px solid var(--cat-recibo-border); }
-  .badge-compra        { background: var(--cat-compra-bg); color: var(--cat-compra-fg); border: 1px solid var(--cat-compra-border); }
   .badge-manutencao    { background: var(--cat-manutencao-bg); color: var(--cat-manutencao-fg); border: 1px solid var(--cat-manutencao-border); }
-  .badge-estado        { background: var(--cat-estado-bg); color: var(--cat-estado-fg); border: 1px solid var(--cat-estado-border); }
   .badge-avenca        { background: var(--cat-avenca-bg); color: var(--cat-avenca-fg); border: 1px solid var(--cat-avenca-border); }
-  .badge-seguro        { background: var(--cat-seguro-bg); color: var(--cat-seguro-fg); border: 1px solid var(--cat-seguro-border); }
-  .badge-salario       { background: var(--cat-salario-bg); color: var(--cat-salario-fg); border: 1px solid var(--cat-salario-border); }
   .badge-recebimento   { background: var(--cat-recebimento-bg); color: var(--cat-recebimento-fg); border: 1px solid var(--cat-recebimento-border); }
+  .badge-seg-social    { background: var(--cat-seg-social-bg); color: var(--cat-seg-social-fg); border: 1px solid var(--cat-seg-social-border); }
+  .badge-iva           { background: var(--cat-iva-bg); color: var(--cat-iva-fg); border: 1px solid var(--cat-iva-border); }
 }

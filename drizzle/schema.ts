@@ -23,7 +23,7 @@ export const userConfig = mysqlTable("user_config", {
   empresaNif: varchar("empresaNif", { length: 20 }).notNull().default("518604870"),
   empresaMorada: varchar("empresaMorada", { length: 500 }).notNull().default("Rua Miguel Pais, Nº 46, 1º F, Barreiro, 2830-356, Portugal"),
   // JSON array de tipos de movimento
-  tiposJson: text("tiposJson").notNull().default('["GERAR FATURA","RECIBO VERDE","RECIBO","RECEBIMENTO","FATURA COMPRA","MANUTENÇÃO DE CONTA","PAGAMENTO AO ESTADO","AVENÇA CONTAB","SEGURO BANCARIO","RECIBO SALARIO"]'),
+  tiposJson: text("tiposJson").notNull().default('["FATURA","COMPRA","RECIBO VERDE","RECIBO","MANUT. CONTA","AVENÇA CONT.","RECEBIMENTO","SEG. SOCIAL","IVA"]'),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

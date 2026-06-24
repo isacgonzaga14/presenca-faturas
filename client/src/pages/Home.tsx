@@ -53,14 +53,15 @@ function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
 
 // ─── Pré-classificação automática por palavras-chave ───────
 const REGRAS_AUTO: Array<{ palavras: string[]; tipo: TipoMovimento }> = [
-  { palavras: ["seguro","seg ban","seguro bancario"], tipo: "SEGURO BANCARIO" },
-  { palavras: ["seg soc","segurança social","seg social","ss "], tipo: "PAGAMENTO AO ESTADO" },
-  { palavras: ["at ","autoridade tributaria","irs","iva ","at-"], tipo: "PAGAMENTO AO ESTADO" },
-  { palavras: ["contabilidade","contabil","avença","avenca"], tipo: "AVENÇA CONTAB" },
-  { palavras: ["manutencao","manutenção","comissão","comissao","mensalidade conta"], tipo: "MANUTENÇÃO DE CONTA" },
-  { palavras: ["recibo salario","salario","vencimento","remuneracao","remuneração"], tipo: "RECIBO SALARIO" },
+  { palavras: ["seg soc","segurança social","seg social","seguranca social"], tipo: "SEG. SOCIAL" },
+  { palavras: ["at ","autoridade tributaria","irs","at-"], tipo: "IVA" },
+  { palavras: ["iva ","iva-","pagamento iva"], tipo: "IVA" },
+  { palavras: ["contabilidade","contabil","avença","avenca"], tipo: "AVENÇA CONT." },
+  { palavras: ["manutencao","manutenção","comissão","comissao","mensalidade conta","seguro","seg ban"], tipo: "MANUT. CONTA" },
   { palavras: ["recibo verde","recibo vd"], tipo: "RECIBO VERDE" },
-  { palavras: ["inst ","transferencia inst","transf inst"], tipo: "GERAR FATURA" },
+  { palavras: ["recibo salario","salario","vencimento","remuneracao","remuneração"], tipo: "RECIBO" },
+  { palavras: ["compra","el-e","fatura compra"], tipo: "COMPRA" },
+  { palavras: ["inst ","transferencia inst","transf inst","trf sepa"], tipo: "FATURA" },
 ];
 
 function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Movimento[] {
@@ -79,16 +80,15 @@ function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Mo
 
 // ─── Badge map ─────────────────────────────────────────────
 const BADGE_MAP: Record<string, string> = {
-  "GERAR FATURA":        "badge-fatura",
-  "RECIBO VERDE":        "badge-recibo-verde",
-  "RECIBO":              "badge-recibo",
-  "RECEBIMENTO":         "badge-recebimento",
-  "FATURA COMPRA":       "badge-compra",
-  "MANUTENÇÃO DE CONTA": "badge-manutencao",
-  "PAGAMENTO AO ESTADO": "badge-estado",
-  "AVENÇA CONTAB":       "badge-avenca",
-  "SEGURO BANCARIO":     "badge-seguro",
-  "RECIBO SALARIO":      "badge-salario",
+  "FATURA":       "badge-fatura",
+  "COMPRA":       "badge-compra",
+  "RECIBO VERDE": "badge-recibo-verde",
+  "RECIBO":       "badge-recibo",
+  "MANUT. CONTA": "badge-manutencao",
+  "AVENÇA CONT.": "badge-avenca",
+  "RECEBIMENTO":  "badge-recebimento",
+  "SEG. SOCIAL":  "badge-seg-social",
+  "IVA":          "badge-iva",
 };
 
 // ─── Parser XLSX BPI ───────────────────────────────────────
@@ -506,7 +506,7 @@ export default function Home() {
       ...m,
       statusDoc: m.arquivoNome
         ? ("conciliado" as const)
-        : (m.tipo === "GERAR FATURA" || m.tipo === "RECIBO VERDE"
+        : (m.tipo === "FATURA" || m.tipo === "RECIBO VERDE"
             ? ("sem_doc" as const)
             : undefined),
     }));
@@ -711,7 +711,7 @@ export default function Home() {
 
   const gerarDocumento = () => {
     const doc = gerarDocumentoFinal(movimentos, mes, config.empresa);
-    if (!doc) { toast.error("Nenhuma linha marcada como GERAR FATURA."); return; }
+    if (!doc) { toast.error("Nenhuma linha marcada como FATURA."); return; }
     actualizarMesActivo({ docGerado: doc });
     setMostrarDoc(true);
     toast.success("Documento gerado!");
@@ -765,10 +765,10 @@ export default function Home() {
   };
 
   // ─── Métricas ─────────────────────────────────────────────
-  const totalFaturas = totalPorTipo(movimentos, "GERAR FATURA");
+  const totalFaturas = totalPorTipo(movimentos, "FATURA");
   const baseTotal = calcularValorBase(totalFaturas);
   const dezPct = baseTotal * 0.1;
-  const numFaturas = movimentos.filter(m => m.tipo === "GERAR FATURA").length;
+  const numFaturas = movimentos.filter(m => m.tipo === "FATURA").length;
   const totalClassificados = movimentos.filter(m => m.tipo).length;
   const semTipo = movimentos.filter(m => !m.tipo).length;
 

@@ -4,16 +4,15 @@
 // ============================================================
 
 export type TipoMovimento =
-  | "GERAR FATURA"
+  | "FATURA"
+  | "COMPRA"
   | "RECIBO VERDE"
   | "RECIBO"
+  | "MANUT. CONTA"
+  | "AVENÇA CONT."
   | "RECEBIMENTO"
-  | "FATURA COMPRA"
-  | "MANUTENÇÃO DE CONTA"
-  | "PAGAMENTO AO ESTADO"
-  | "AVENÇA CONTAB"
-  | "SEGURO BANCARIO"
-  | "RECIBO SALARIO"
+  | "SEG. SOCIAL"
+  | "IVA"
   | "";
 
 export interface Movimento {
@@ -34,46 +33,43 @@ export interface Movimento {
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)
 export const TIPOS_PADRAO: TipoMovimento[] = [
-  "GERAR FATURA",
+  "FATURA",
+  "COMPRA",
   "RECIBO VERDE",
   "RECIBO",
+  "MANUT. CONTA",
+  "AVENÇA CONT.",
   "RECEBIMENTO",
-  "FATURA COMPRA",
-  "MANUTENÇÃO DE CONTA",
-  "PAGAMENTO AO ESTADO",
-  "AVENÇA CONTAB",
-  "SEGURO BANCARIO",
-  "RECIBO SALARIO",
+  "SEG. SOCIAL",
+  "IVA",
 ];
 
 export const TIPOS: TipoMovimento[] = TIPOS_PADRAO;
 
 export const TIPO_ROW_CLASS: Record<string, string> = {
-  "GERAR FATURA":        "row-fatura",
-  "RECIBO VERDE":        "row-recibo-verde",
-  "RECIBO":              "row-recibo",
-  "RECEBIMENTO":         "row-recebimento",
-  "FATURA COMPRA":       "row-compra",
-  "MANUTENÇÃO DE CONTA": "row-manutencao",
-  "PAGAMENTO AO ESTADO": "row-estado",
-  "AVENÇA CONTAB":       "row-avenca",
-  "SEGURO BANCARIO":     "row-seguro",
-  "RECIBO SALARIO":      "row-salario",
-  "":                    "",
+  "FATURA":       "row-fatura",
+  "COMPRA":       "row-compra",
+  "RECIBO VERDE": "row-recibo-verde",
+  "RECIBO":       "row-recibo",
+  "MANUT. CONTA": "row-manutencao",
+  "AVENÇA CONT.": "row-avenca",
+  "RECEBIMENTO":  "row-recebimento",
+  "SEG. SOCIAL":  "row-seg-social",
+  "IVA":          "row-iva",
+  "":             "",
 };
 
 export const TIPO_BADGE_CLASS: Record<string, string> = {
-  "GERAR FATURA":        "badge-fatura",
-  "RECIBO VERDE":        "badge-recibo-verde",
-  "RECIBO":              "badge-recibo",
-  "RECEBIMENTO":         "badge-recebimento",
-  "FATURA COMPRA":       "badge-compra",
-  "MANUTENÇÃO DE CONTA": "badge-manutencao",
-  "PAGAMENTO AO ESTADO": "badge-estado",
-  "AVENÇA CONTAB":       "badge-avenca",
-  "SEGURO BANCARIO":     "badge-seguro",
-  "RECIBO SALARIO":      "badge-salario",
-  "":                    "",
+  "FATURA":       "badge-fatura",
+  "COMPRA":       "badge-compra",
+  "RECIBO VERDE": "badge-recibo-verde",
+  "RECIBO":       "badge-recibo",
+  "MANUT. CONTA": "badge-manutencao",
+  "AVENÇA CONT.": "badge-avenca",
+  "RECEBIMENTO":  "badge-recebimento",
+  "SEG. SOCIAL":  "badge-seg-social",
+  "IVA":          "badge-iva",
+  "":             "",
 };
 
 // Mês anterior
@@ -117,7 +113,7 @@ export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string
   const numerario = valor > 1800 ? " Pagamentos em numerario." : "";
 
   switch (tipo) {
-    case "GERAR FATURA":
+    case "FATURA":
       if (!inst) return "";
       return `Serviço prestado no mês de ${mesRef}${clienteStr} como porteiro em eventos e festas privadas (INST ${inst}).${numerario}`;
     case "RECIBO VERDE":
@@ -126,7 +122,7 @@ export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string
       return "Apresentar recibo.";
     case "RECEBIMENTO":
       return inst ? `Recebimento referente ao mês de ${mesRef} (INST ${inst}).` : `Recebimento referente ao mês de ${mesRef}.`;
-    case "FATURA COMPRA":
+    case "COMPRA":
       return inst ? `Fatura de compra referente ao mês de ${mesRef} (INST ${inst}).` : `Fatura de compra referente ao mês de ${mesRef}.`;
     default:
       return "";
@@ -201,7 +197,7 @@ export function gerarDocumentoFinal(
   empresa: ConfigEmpresa = EMPRESA_PADRAO,
   tiposExtras: string[] = []
 ): string {
-  const selecionados = movimentos.filter(m => m.tipo === "GERAR FATURA");
+  const selecionados = movimentos.filter(m => m.tipo === "FATURA");
   if (selecionados.length === 0) return "";
 
   // Mês de referência = mês anterior ao mês do extrato (igual à tabela)
