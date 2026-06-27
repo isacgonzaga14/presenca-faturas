@@ -29,11 +29,18 @@ export const appRouter = router({
     get: protectedProcedure.query(async ({ ctx }) => {
       const cfg = await getUserConfig(ctx.user.id);
       if (!cfg) return null;
+      // Suporta formato antigo (string[]) e novo ({nome,cor}[])
+      const raw = JSON.parse(cfg.tiposJson);
+      const tipos: Array<{ nome: string; cor: string }> = Array.isArray(raw)
+        ? raw.map((t: string | { nome: string; cor?: string }) =>
+            typeof t === "string" ? { nome: t, cor: "" } : { nome: t.nome, cor: t.cor ?? "" }
+          )
+        : [];
       return {
         empresaNome: cfg.empresaNome,
         empresaNif: cfg.empresaNif,
         empresaMorada: cfg.empresaMorada,
-        tipos: JSON.parse(cfg.tiposJson) as string[],
+        tipos,
       };
     }),
 
@@ -42,7 +49,8 @@ export const appRouter = router({
         empresaNome: z.string().min(1),
         empresaNif: z.string().min(1),
         empresaMorada: z.string(),
-        tipos: z.array(z.string()),
+        // Aceita {nome, cor}[] para persistir as cores personalizadas
+        tipos: z.array(z.object({ nome: z.string(), cor: z.string() })),
       }))
       .mutation(async ({ ctx, input }) => {
         await saveUserConfig(ctx.user.id, {

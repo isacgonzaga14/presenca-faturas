@@ -81,16 +81,99 @@ interface Config {
 function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
 
 // ─── Pré-classificação automática por palavras-chave ───────
+// REGRAS DE AUTO-CLASSIFICAÇÃO
+// Ordem importa: regras mais específicas primeiro para evitar falsos positivos.
+// Cada regra é testada contra a descrição em lowercase; a primeira que corresponder ganha.
 const REGRAS_AUTO: Array<{ palavras: string[]; tipo: TipoMovimento }> = [
-  { palavras: ["seg soc","segurança social","seg social","seguranca social"], tipo: "SEG. SOCIAL" },
-  { palavras: ["at ","autoridade tributaria","irs","at-"], tipo: "IVA" },
-  { palavras: ["iva ","iva-","pagamento iva"], tipo: "IVA" },
-  { palavras: ["contabilidade","contabil","avença","avenca"], tipo: "AVENÇA CONT." },
-  { palavras: ["manutencao","manutenção","comissão","comissao","mensalidade conta","seguro","seg ban"], tipo: "MANUT. CONTA" },
-  { palavras: ["recibo verde","recibo vd"], tipo: "RECIBO VERDE" },
-  { palavras: ["recibo salario","salario","vencimento","remuneracao","remuneração"], tipo: "RECIBO" },
-  { palavras: ["compra","el-e","fatura compra"], tipo: "COMPRA" },
-  { palavras: ["inst ","transferencia inst","transf inst","trf sepa"], tipo: "FATURA SERVIÇO" },
+  // SEG. SOCIAL — Instituto de Gestão Financeira da Seg. Social (PAGSERV, IGFSS)
+  {
+    palavras: [
+      "seg soc", "seg social", "segurança social", "seguranca social",
+      "pagserv", "igfss", "instituto gestao financ", "instituto de gestão",
+      "seg.soc", "contribuicao", "contribuição segurança",
+    ],
+    tipo: "SEG. SOCIAL",
+  },
+
+  // IVA — Autoridade Tributária, pagamento de IVA
+  {
+    palavras: [
+      "iva ", "iva-", "pagamento iva", "at ", "at-",
+      "autoridade tributaria", "autoridade tributária",
+      "irs", "dgci", "finanças", "financas",
+    ],
+    tipo: "IVA",
+  },
+
+  // AVENÇA CONT. — Contabilista, serviços de contabilidade
+  {
+    palavras: [
+      "contabilidade", "contabil", "avença", "avenca",
+      "contabilista", "toc ", "toc-", "roc ",
+    ],
+    tipo: "AVENÇA CONT.",
+  },
+
+  // MANUT. CONTA — Comissões bancárias, seguros, mensalidades
+  {
+    palavras: [
+      "manutencao", "manutenção", "comissão", "comissao",
+      "mensalidade conta", "seguro", "seg ban",
+      "comissao de", "imposto selo", "taxa de",
+      "anuidade", "quota",
+    ],
+    tipo: "MANUT. CONTA",
+  },
+
+  // RECIBO VERDE — Trabalhadores independentes, recibos verdes
+  {
+    palavras: [
+      "recibo verde", "recibo vd", "rec verde",
+      "trabalhador independente", "independente",
+    ],
+    tipo: "RECIBO VERDE",
+  },
+
+  // RECIBO (salário / vencimento de funcionários)
+  {
+    palavras: [
+      "recibo salario", "salario", "vencimento",
+      "remuneracao", "remuneração",
+      "ordenado", "sal ", "sal-",
+    ],
+    tipo: "RECIBO",
+  },
+
+  // COMPRA — Compras com cartão, compras online (EL-E = compra electrónica BPI)
+  {
+    palavras: [
+      "compra", "el-e", "fatura compra",
+      "pagamento compra", "pag compra",
+      "amazon", "worten", "leroy", "ikea", "continente",
+      "pingo doce", "lidl", "aldi", "decathlon",
+      "notion", "google", "microsoft", "apple",
+    ],
+    tipo: "COMPRA",
+  },
+
+  // RECEBIMENTO — Entradas genéricas que não são INST de serviço
+  {
+    palavras: [
+      "recebimento", "deposito", "depósito",
+      "transferencia recebida", "transf recebida",
+    ],
+    tipo: "RECEBIMENTO",
+  },
+
+  // FATURA SERVIÇO — Pagamentos via INST (clientes da empresa)
+  // Esta regra fica por último para não capturar INST de outras categorias
+  {
+    palavras: [
+      "trf sepa+ inst", "sepa+ inst",
+      "transferencia inst", "transf inst",
+    ],
+    tipo: "FATURA SERVIÇO",
+  },
 ];
 
 function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Movimento[] {
@@ -453,7 +536,11 @@ export default function Home() {
           nif: configData.empresaNif,
           morada: configData.empresaMorada,
         },
-        tipos: tiposParaConfig(configData.tipos),
+        // O servidor já devolve {nome, cor}[] — usar directamente, preenchendo cor vazia com a cor calculada
+        tipos: configData.tipos.map(t => ({
+          nome: t.nome,
+          cor: t.cor || corParaTipo(t.nome),
+        })),
       });
     }
   }, [configData]);
@@ -1025,7 +1112,8 @@ export default function Home() {
       empresaNome: cfg.empresa.nome,
       empresaNif: cfg.empresa.nif,
       empresaMorada: cfg.empresa.morada,
-      tipos: cfg.tipos.map(t => t.nome),
+      // Guardar com cor para persistir as personalizações
+      tipos: cfg.tipos.map(t => ({ nome: t.nome, cor: t.cor })),
     });
   };
 
