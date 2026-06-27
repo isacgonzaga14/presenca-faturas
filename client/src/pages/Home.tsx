@@ -1118,12 +1118,33 @@ export default function Home() {
   };
 
   // ─── Métricas ─────────────────────────────────────────────
+  // ─── Métricas internas (usadas na lógica de geração) ────────
   const totalFaturas = totalFaturasServico(movimentos);
   const baseTotal = calcularValorBase(totalFaturas);
   const dezPct = baseTotal * 0.1;
   const numFaturas = movimentos.filter(m => m.tipo === "FATURA SERVIÇO" || m.tipo === "FATURA").length;
   const totalClassificados = movimentos.filter(m => m.tipo).length;
   const semTipo = movimentos.filter(m => !m.tipo).length;
+
+  // ─── MOVIMENTO MENSAL ─────────────────────────────────────
+  // ENTRADA: apenas RECEBIMENTO (dinheiro que entra efectivamente na conta)
+  const tiposEntrada: TipoMovimento[] = ["RECEBIMENTO"];
+  const totalEntrada = movimentos
+    .filter(m => tiposEntrada.includes(m.tipo as TipoMovimento))
+    .reduce((s, m) => s + m.valor, 0);
+  // IVA 23%: o IVA embutido nas entradas (valor recebido já inclui IVA)
+  const ivaEntrada = totalEntrada - totalEntrada / 1.23;
+  const entradaLiquida = totalEntrada / 1.23; // valor líquido da empresa
+
+  // SAÍDAS: FATURA SERVIÇO + todas as despesas
+  const tiposSaida: TipoMovimento[] = ["FATURA SERVIÇO", "FATURA", "COMPRA", "RECIBO", "RECIBO VERDE", "MANUT. CONTA", "AVENÇA CONT.", "SEG. SOCIAL", "IVA"];
+  const totalSaidas = movimentos
+    .filter(m => tiposSaida.includes(m.tipo as TipoMovimento))
+    .reduce((s, m) => s + m.valor, 0);
+
+  // IVA A DEDUZIR: reservado — lógica a implementar futuramente
+  // (placeholder: 0 até o Isac passar a lógica)
+  const ivaADeduzir = 0;
 
   // ─── Loading / Login ──────────────────────────────────────
   if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
@@ -1351,18 +1372,62 @@ export default function Home() {
             )}
           </div>
 
+          {/* MOVIMENTO MENSAL — 3 cards */}
           <div className="col-span-3 grid grid-cols-3 gap-3">
-            {[
-              { label: "Total FATURA SERVIÇO", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#60a5fa", bg: "#15314f" },
-              { label: "Valor Base (÷ 1,23)", value: formatEur(baseTotal), sub: "Sem IVA", color: "#60a5fa", bg: "#11203a" },
-              { label: "10% do Valor Base", value: formatEur(dezPct), sub: "Referência comissão", color: "#4ade80", bg: "#103a22" },
-            ].map(({ label, value, sub, color, bg }) => (
-              <div key={label} className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: bg, borderTop: `4px solid ${color}` }}>
-                <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide">{label}</div>
-                <div className="font-mono font-bold text-2xl mt-1" style={{ color }}>{value}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{sub}</div>
+
+            {/* ENTRADA */}
+            <div className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: "#0d2a1a", borderTop: "4px solid #22c55e" }}>
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">Entrada</div>
+              <div className="font-mono font-bold text-2xl text-green-400">{formatEur(totalEntrada)}</div>
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Empresa (líquido)</span>
+                  <span className="text-green-300 font-mono font-semibold">{formatEur(entradaLiquida)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">IVA 23% (do Estado)</span>
+                  <span className="text-amber-300 font-mono font-semibold">{formatEur(ivaEntrada)}</span>
+                </div>
               </div>
-            ))}
+            </div>
+
+            {/* SAÍDAS */}
+            <div className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: "#2a0d0d", borderTop: "4px solid #ef4444" }}>
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">Saídas</div>
+              <div className="font-mono font-bold text-2xl text-red-400">{formatEur(totalSaidas)}</div>
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Saldo do mês</span>
+                  <span className={`font-mono font-semibold ${
+                    totalEntrada - totalSaidas >= 0 ? "text-green-300" : "text-red-300"
+                  }`}>{formatEur(totalEntrada - totalSaidas)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Despesas registadas</span>
+                  <span className="text-slate-300 font-mono">
+                    {movimentos.filter(m => tiposSaida.includes(m.tipo as TipoMovimento)).length} linha{movimentos.filter(m => tiposSaida.includes(m.tipo as TipoMovimento)).length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* IVA A DEDUZIR */}
+            <div className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: "#1a1a0d", borderTop: "4px solid #eab308" }}>
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">IVA a Deduzir</div>
+              <div className="font-mono font-bold text-2xl text-yellow-400">
+                {ivaADeduzir === 0 ? <span className="text-slate-500 text-sm font-normal">A configurar</span> : formatEur(ivaADeduzir)}
+              </div>
+              <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">IVA cobrado</span>
+                  <span className="text-amber-300 font-mono font-semibold">{formatEur(ivaEntrada)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 italic">Lógica trimestral em breve</span>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
