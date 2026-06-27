@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Building2, Activity, User, LogOut, Printer, Wallet, TrendingUp,
   TrendingDown, Scale, AlertTriangle, CheckCircle2, Landmark, FileText,
-  RefreshCw, Settings2, Info,
+  RefreshCw, Settings2, Info, BookOpen,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
@@ -35,7 +35,8 @@ function lerSaldo(uid: string | number): DadosSaldo {
     const raw = localStorage.getItem(`saude-saldo-${uid}`);
     if (raw) return JSON.parse(raw);
   } catch { /* ignora */ }
-  return { saldoInicial: 0, saldoInicialData: "", saldoReal: 0, saldoRealData: "" };
+  // Saldo inicial padrão: 203,28 € (saldo bancário BPI em 01/01/2026 — confirmado pelo balancete 2025 e extrato jan/2026)
+  return { saldoInicial: 203.28, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" };
 }
 function gravarSaldo(uid: string | number, d: DadosSaldo) {
   try { localStorage.setItem(`saude-saldo-${uid}`, JSON.stringify(d)); } catch { /* ignora */ }
@@ -117,7 +118,7 @@ export default function Saude() {
   );
 
   // Estado: saldo + overrides de direção (persistidos no navegador)
-  const [saldo, setSaldo] = useState<DadosSaldo>({ saldoInicial: 0, saldoInicialData: "", saldoReal: 0, saldoRealData: "" });
+  const [saldo, setSaldo] = useState<DadosSaldo>({ saldoInicial: 203.28, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" });
   const [saldoInicialTxt, setSaldoInicialTxt] = useState("");
   const [saldoRealTxt, setSaldoRealTxt] = useState("");
   const [overrides, setOverrides] = useState<Record<string, Direcao>>({});
@@ -127,7 +128,9 @@ export default function Saude() {
   useEffect(() => {
     const s = lerSaldo(uid);
     setSaldo(s);
-    setSaldoInicialTxt(s.saldoInicial ? String(s.saldoInicial).replace(".", ",") : "");
+    // Se nunca foi guardado (saldo inicial = 0), pré-preenche com 203,28 € (balancete 2025)
+    const saldoInicialEfetivo = s.saldoInicial !== 0 ? s.saldoInicial : 203.28;
+    setSaldoInicialTxt(saldoInicialEfetivo ? String(saldoInicialEfetivo).replace(".", ",") : "");
     setSaldoRealTxt(s.saldoReal ? String(s.saldoReal).replace(".", ",") : "");
     setOverrides(lerDirecoes(uid));
   }, [uid]);
@@ -189,6 +192,18 @@ export default function Saude() {
 
   const dataHoje = new Date().toLocaleDateString("pt-PT");
   const semDados = meses.length === 0 || global.totalMovimentos === 0;
+
+  // Dados históricos 2025 (balancete analítico jan-dez 2025)
+  const HISTORICO_2025 = {
+    rendimentos: 83064.00,
+    gastos: 77227.84,
+    resultado: 5836.16,
+    saldoBancario: 203.28,
+    saldoCaixa: 5119.28,
+    clientesEmAberto: 5490.72, // INST 120 — fatura dez/2025 paga em jan/2026
+    ivaPagar: 4803.22,
+    segSocialPagar: 174.00,
+  };
 
   const corLiquido = global.liquido >= 0 ? "#34d399" : "#f87171";
   const corDiferenca = conc.conciliado ? "#34d399" : Math.abs(conc.diferenca) < 50 ? "#fbbf24" : "#f87171";
@@ -256,6 +271,53 @@ export default function Saude() {
           </div>
         </div>
 
+        {/* PAINEL HISTÓRICO 2025 — sempre visível */}
+        <section className="bg-[#0f1e35] border border-[#1e3a5c] rounded-lg p-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-5 h-5 text-blue-400" />
+            <h2 className="text-base font-bold text-white">Contexto histórico — Exercício 2025</h2>
+            <span className="text-[10px] text-blue-300/50 font-mono ml-1">Balancete Analítico jan–dez 2025</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-emerald-300/70 font-semibold mb-1">Rendimentos 2025</div>
+              <div className="font-mono font-bold text-emerald-300 text-sm">{formatEur(HISTORICO_2025.rendimentos)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">Prestações de serviços</div>
+            </div>
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-red-300/70 font-semibold mb-1">Gastos 2025</div>
+              <div className="font-mono font-bold text-red-300 text-sm">{formatEur(HISTORICO_2025.gastos)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">FSE + Pessoal + outros</div>
+            </div>
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-blue-300/70 font-semibold mb-1">Resultado 2025</div>
+              <div className="font-mono font-bold text-blue-200 text-sm">{formatEur(HISTORICO_2025.resultado)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">Rendimentos − Gastos</div>
+            </div>
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-amber-300/70 font-semibold mb-1">Saldo bancário</div>
+              <div className="font-mono font-bold text-amber-200 text-sm">{formatEur(HISTORICO_2025.saldoBancario)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">31/12/2025 · BPI</div>
+            </div>
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-purple-300/70 font-semibold mb-1">Clientes em aberto</div>
+              <div className="font-mono font-bold text-purple-200 text-sm">{formatEur(HISTORICO_2025.clientesEmAberto)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">INST 120 · pago jan/2026</div>
+            </div>
+            <div className="bg-[#141b29] rounded p-3">
+              <div className="text-[10px] uppercase text-orange-300/70 font-semibold mb-1">IVA a pagar</div>
+              <div className="font-mono font-bold text-orange-200 text-sm">{formatEur(HISTORICO_2025.ivaPagar)}</div>
+              <div className="text-[10px] text-blue-300/40 mt-0.5">Seg. Social: {formatEur(HISTORICO_2025.segSocialPagar)}</div>
+            </div>
+          </div>
+          <div className="mt-3 flex items-start gap-2 bg-blue-950/40 border border-blue-800/40 rounded p-2.5 text-[11px] text-blue-200/80">
+            <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-400" />
+            <span>
+              <strong>Nota sobre o INST 120 (5.490,72 €):</strong> Este recebimento de janeiro 2026 corresponde à fatura de dezembro 2025 — já estava registado como cliente em aberto no balancete 2025 (conta 21111999). O saldo inicial de 2026 é <strong>203,28 €</strong>, confirmado pelo extracto BPI de 01/01/2026.
+            </span>
+          </div>
+        </section>
+
         {semDados && (
           <div className="bg-[#141b29] border border-[#1e3a5c] rounded-lg p-8 text-center text-blue-300/70 mb-6">
             <Info className="w-8 h-8 mx-auto mb-3 text-blue-400/50" />
@@ -293,7 +355,7 @@ export default function Saude() {
                 placeholder="0,00"
                 className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-3 py-2 text-white font-mono text-sm focus:border-blue-500 outline-none"
               />
-              <span className="text-[10px] text-blue-300/40">saldo na conta antes do 1.º mês registado</span>
+              <span className="text-[10px] text-blue-300/40">saldo bancário em 01/01/2026 · confirmado pelo balancete 2025 e extrato BPI</span>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-[11px] uppercase tracking-wide text-amber-300/80 font-semibold">★ Saldo real atual na conta (€)</span>
@@ -305,7 +367,7 @@ export default function Saude() {
                 placeholder="0,00"
                 className="bg-[#0a0e16] border border-amber-700/50 rounded px-3 py-2 text-white font-mono text-sm focus:border-amber-500 outline-none"
               />
-              <span className="text-[10px] text-blue-300/40">o que vês hoje no homebanking{saldo.saldoRealData ? ` · lido em ${saldo.saldoRealData}` : ""}</span>
+              <span className="text-[10px] text-blue-300/40">saldo actual no homebanking BPI{saldo.saldoRealData ? ` · lido em ${saldo.saldoRealData}` : " · ainda não preenchido"}</span>
             </label>
           </div>
 
