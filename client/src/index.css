@@ -141,3 +141,45 @@
   .badge-seg-social    { background: var(--cat-seg-social-bg); color: var(--cat-seg-social-fg); border: 1px solid var(--cat-seg-social-border); }
   .badge-iva           { background: var(--cat-iva-bg); color: var(--cat-iva-fg); border: 1px solid var(--cat-iva-border); }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   SAÚDE DA EMPRESA — Relatórios imprimíveis
+   A área de impressão fica oculta no ecrã e só aparece em print.
+   ───────────────────────────────────────────────────────────── */
+.area-impressao { display: none; }
+.no-print { /* visível no ecrã, oculto na impressão */ }
+
+@media print {
+  @page { margin: 18mm 16mm; size: A4; }
+  html, body { background: #ffffff !important; }
+  .app-screen { background: #ffffff !important; }
+  .no-print { display: none !important; }
+  .area-impressao { display: block !important; }
+}
+
+/* Documento do relatório (estilo sóbrio, claro, pronto a enviar) */
+.rel-doc {
+  color: #111827;
+  font-family: 'IBM Plex Sans', sans-serif;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.rel-doc h1 { font-size: 20px; font-weight: 700; margin: 0 0 2px; color: #0f2744; }
+.rel-doc h2 { font-size: 13px; font-weight: 700; margin: 18px 0 6px; color: #0f2744; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; }
+.rel-cab { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #2563eb; padding-bottom: 10px; margin-bottom: 6px; }
+.rel-sub { font-size: 11px; color: #475569; font-family: 'IBM Plex Mono', monospace; }
+.rel-meta { text-align: right; font-size: 11px; color: #475569; }
+.rel-tab { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+.rel-tab th, .rel-tab td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+.rel-tab th { background: #f1f5f9; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: #334155; }
+.rel-tab td.num, .rel-tab th.num { text-align: right; font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.rel-tab tr.forte td { font-weight: 700; background: #f8fafc; }
+.rel-tab tr.destaque td { font-size: 14px; border-top: 2px solid #0f2744; }
+.rel-tab tfoot tr td { border-top: 2px solid #0f2744; font-weight: 700; }
+.rel-estado { font-size: 13px; padding: 8px 10px; background: #f1f5f9; border-left: 4px solid #2563eb; border-radius: 3px; }
+.rel-lista { margin: 4px 0 0; padding-left: 20px; }
+.rel-lista li { margin: 3px 0; }
+.rel-rodape { margin-top: 26px; padding-top: 8px; border-top: 1px solid #cbd5e1; font-size: 10px; color: #64748b; display: flex; justify-content: space-between; }

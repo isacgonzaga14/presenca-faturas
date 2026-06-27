@@ -26,6 +26,7 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
+import NavSuperior from "@/components/NavSuperior";
 
 // ─── Constantes ────────────────────────────────────────────
 const MESES = [
@@ -1083,6 +1084,8 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      <NavSuperior />
 
       {/* ABAS DE MESES */}
       <div className="bg-[#0f2744] border-b border-[#1e3a5c]">
