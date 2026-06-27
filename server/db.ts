@@ -91,7 +91,7 @@ export async function getUserByOpenId(openId: string) {
 
 // ─── UserConfig ─────────────────────────────────────────────
 
-const TIPOS_PADRAO_JSON = '["GERAR FATURA","RECIBO VERDE","RECIBO","RECEBIMENTO","FATURA COMPRA","MANUTENÇÃO DE CONTA","PAGAMENTO AO ESTADO","AVENÇA CONTAB","SEGURO BANCARIO","RECIBO SALARIO"]';
+const TIPOS_PADRAO_JSON = '["FATURA SERVIÇO","COMPRA","RECIBO VERDE","RECIBO","MANUT. CONTA","AVENÇA CONT.","RECEBIMENTO","SEG. SOCIAL","IVA"]';
 
 export async function getUserConfig(userId: number): Promise<UserConfig | null> {
   const db = await getDb();

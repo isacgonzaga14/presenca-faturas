@@ -4,6 +4,7 @@
 // ============================================================
 
 export type TipoMovimento =
+  | "FATURA SERVIÇO"
   | "FATURA"
   | "COMPRA"
   | "RECIBO VERDE"
@@ -33,7 +34,7 @@ export interface Movimento {
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)
 export const TIPOS_PADRAO: TipoMovimento[] = [
-  "FATURA",
+  "FATURA SERVIÇO",
   "COMPRA",
   "RECIBO VERDE",
   "RECIBO",
@@ -47,29 +48,31 @@ export const TIPOS_PADRAO: TipoMovimento[] = [
 export const TIPOS: TipoMovimento[] = TIPOS_PADRAO;
 
 export const TIPO_ROW_CLASS: Record<string, string> = {
-  "FATURA":       "row-fatura",
-  "COMPRA":       "row-compra",
-  "RECIBO VERDE": "row-recibo-verde",
-  "RECIBO":       "row-recibo",
-  "MANUT. CONTA": "row-manutencao",
-  "AVENÇA CONT.": "row-avenca",
-  "RECEBIMENTO":  "row-recebimento",
-  "SEG. SOCIAL":  "row-seg-social",
-  "IVA":          "row-iva",
-  "":             "",
+  "FATURA SERVIÇO": "row-fatura",
+  "FATURA":         "row-fatura",
+  "COMPRA":         "row-compra",
+  "RECIBO VERDE":   "row-recibo-verde",
+  "RECIBO":         "row-recibo",
+  "MANUT. CONTA":   "row-manutencao",
+  "AVENÇA CONT.":   "row-avenca",
+  "RECEBIMENTO":    "row-recebimento",
+  "SEG. SOCIAL":    "row-seg-social",
+  "IVA":            "row-iva",
+  "":               "",
 };
 
 export const TIPO_BADGE_CLASS: Record<string, string> = {
-  "FATURA":       "badge-fatura",
-  "COMPRA":       "badge-compra",
-  "RECIBO VERDE": "badge-recibo-verde",
-  "RECIBO":       "badge-recibo",
-  "MANUT. CONTA": "badge-manutencao",
-  "AVENÇA CONT.": "badge-avenca",
-  "RECEBIMENTO":  "badge-recebimento",
-  "SEG. SOCIAL":  "badge-seg-social",
-  "IVA":          "badge-iva",
-  "":             "",
+  "FATURA SERVIÇO": "badge-fatura",
+  "FATURA":         "badge-fatura",
+  "COMPRA":         "badge-compra",
+  "RECIBO VERDE":   "badge-recibo-verde",
+  "RECIBO":         "badge-recibo",
+  "MANUT. CONTA":   "badge-manutencao",
+  "AVENÇA CONT.":   "badge-avenca",
+  "RECEBIMENTO":    "badge-recebimento",
+  "SEG. SOCIAL":    "badge-seg-social",
+  "IVA":            "badge-iva",
+  "":               "",
 };
 
 // Mês anterior
@@ -113,6 +116,7 @@ export function gerarDescricao(desc: string, tipo: TipoMovimento, mesRef: string
   const numerario = valor > 1800 ? " Pagamentos em numerario." : "";
 
   switch (tipo) {
+    case "FATURA SERVIÇO":
     case "FATURA":
       if (!inst) return "";
       return `Serviço prestado no mês de ${mesRef}${clienteStr} como porteiro em eventos e festas privadas (INST ${inst}).${numerario}`;
@@ -140,6 +144,13 @@ export function formatEur(valor: number): string {
 export function totalPorTipo(movimentos: Movimento[], tipo: TipoMovimento): number {
   return movimentos
     .filter(m => m.tipo === tipo)
+    .reduce((sum, m) => sum + m.valor, 0);
+}
+
+// Alias para facilitar: total dos movimentos de serviço (FATURA SERVIÇO ou FATURA legado)
+export function totalFaturasServico(movimentos: Movimento[]): number {
+  return movimentos
+    .filter(m => m.tipo === "FATURA SERVIÇO" || m.tipo === "FATURA")
     .reduce((sum, m) => sum + m.valor, 0);
 }
 
@@ -197,7 +208,7 @@ export function gerarDocumentoFinal(
   empresa: ConfigEmpresa = EMPRESA_PADRAO,
   tiposExtras: string[] = []
 ): string {
-  const selecionados = movimentos.filter(m => m.tipo === "FATURA");
+  const selecionados = movimentos.filter(m => m.tipo === "FATURA SERVIÇO" || m.tipo === "FATURA");
   if (selecionados.length === 0) return "";
 
   // Mês de referência = mês anterior ao mês do extrato (igual à tabela)

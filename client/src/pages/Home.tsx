@@ -10,7 +10,7 @@ import {
   Movimento, TipoMovimento, TIPOS_PADRAO,
   TIPO_ROW_CLASS, TIPO_BADGE_CLASS,
   gerarDescricao, calcularValorBase, formatEur,
-  totalPorTipo, gerarDocumentoFinal, extrairInst, mesAnterior,
+  totalPorTipo, totalFaturasServico, gerarDocumentoFinal, extrairInst, mesAnterior,
   ConfigEmpresa, EMPRESA_PADRAO,
 } from "@/lib/faturas";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,9 +44,37 @@ interface EstadoMes {
   finalizado: boolean;
 }
 
+// Tipo com cor editável
+export interface TipoConfig {
+  nome: string;
+  cor: string; // hex, ex: "#3b82f6"
+}
+
+// Cores padrão para cada tipo
+const CORES_PADRAO: Record<string, string> = {
+  "FATURA SERVIÇO": "#3b82f6",
+  "FATURA":         "#3b82f6",
+  "COMPRA":         "#ef4444",
+  "RECIBO VERDE":   "#22c55e",
+  "RECIBO":         "#06b6d4",
+  "MANUT. CONTA":   "#d97706",
+  "AVENÇA CONT.":   "#9333ea",
+  "RECEBIMENTO":    "#10b981",
+  "SEG. SOCIAL":    "#f97316",
+  "IVA":            "#ec4899",
+};
+
+function corParaTipo(nome: string): string {
+  return CORES_PADRAO[nome] || "#64748b";
+}
+
+function tiposParaConfig(tipos: string[]): TipoConfig[] {
+  return tipos.map(t => ({ nome: t, cor: corParaTipo(t) }));
+}
+
 interface Config {
   empresa: ConfigEmpresa;
-  tipos: string[];
+  tipos: TipoConfig[];
 }
 
 function chave(mes: string, ano: number) { return `${mes}-${ano}`; }
@@ -61,7 +89,7 @@ const REGRAS_AUTO: Array<{ palavras: string[]; tipo: TipoMovimento }> = [
   { palavras: ["recibo verde","recibo vd"], tipo: "RECIBO VERDE" },
   { palavras: ["recibo salario","salario","vencimento","remuneracao","remuneração"], tipo: "RECIBO" },
   { palavras: ["compra","el-e","fatura compra"], tipo: "COMPRA" },
-  { palavras: ["inst ","transferencia inst","transf inst","trf sepa"], tipo: "FATURA" },
+  { palavras: ["inst ","transferencia inst","transf inst","trf sepa"], tipo: "FATURA SERVIÇO" },
 ];
 
 function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Movimento[] {
@@ -80,15 +108,16 @@ function classificarAutomaticamente(movimentos: Movimento[], mesRef: string): Mo
 
 // ─── Badge map ─────────────────────────────────────────────
 const BADGE_MAP: Record<string, string> = {
-  "FATURA":       "badge-fatura",
-  "COMPRA":       "badge-compra",
-  "RECIBO VERDE": "badge-recibo-verde",
-  "RECIBO":       "badge-recibo",
-  "MANUT. CONTA": "badge-manutencao",
-  "AVENÇA CONT.": "badge-avenca",
-  "RECEBIMENTO":  "badge-recebimento",
-  "SEG. SOCIAL":  "badge-seg-social",
-  "IVA":          "badge-iva",
+  "FATURA SERVIÇO": "badge-fatura",
+  "FATURA":         "badge-fatura",
+  "COMPRA":         "badge-compra",
+  "RECIBO VERDE":   "badge-recibo-verde",
+  "RECIBO":         "badge-recibo",
+  "MANUT. CONTA":   "badge-manutencao",
+  "AVENÇA CONT.":   "badge-avenca",
+  "RECEBIMENTO":    "badge-recebimento",
+  "SEG. SOCIAL":    "badge-seg-social",
+  "IVA":            "badge-iva",
 };
 
 // ─── Parser XLSX BPI ───────────────────────────────────────
@@ -130,18 +159,30 @@ function PainelConfig({
   onClose: () => void;
 }) {
   const [empresa, setEmpresa] = useState<ConfigEmpresa>({ ...config.empresa });
-  const [tipos, setTipos] = useState<string[]>([...config.tipos]);
-  const [novoTipo, setNovoTipo] = useState("");
+  const [tipos, setTipos] = useState<TipoConfig[]>(config.tipos.map(t => ({ ...t })));
+  const [novoNome, setNovoNome] = useState("");
+  const [novaCor, setNovaCor] = useState("#3b82f6");
+  const [editandoIdx, setEditandoIdx] = useState<number | null>(null);
 
   const adicionarTipo = () => {
-    const t = novoTipo.trim().toUpperCase();
-    if (!t || tipos.includes(t)) { setNovoTipo(""); return; }
-    setTipos(prev => [...prev, t]);
-    setNovoTipo("");
+    const nome = novoNome.trim().toUpperCase();
+    if (!nome || tipos.some(t => t.nome === nome)) { setNovoNome(""); return; }
+    setTipos(prev => [...prev, { nome, cor: novaCor }]);
+    setNovoNome("");
+    setNovaCor("#3b82f6");
   };
 
-  const removerTipo = (t: string) => {
-    setTipos(prev => prev.filter(x => x !== t));
+  const removerTipo = (idx: number) => {
+    setTipos(prev => prev.filter((_, i) => i !== idx));
+    if (editandoIdx === idx) setEditandoIdx(null);
+  };
+
+  const actualizarNome = (idx: number, nome: string) => {
+    setTipos(prev => prev.map((t, i) => i === idx ? { ...t, nome: nome.toUpperCase() } : t));
+  };
+
+  const actualizarCor = (idx: number, cor: string) => {
+    setTipos(prev => prev.map((t, i) => i === idx ? { ...t, cor } : t));
   };
 
   const guardar = () => {
@@ -155,7 +196,7 @@ function PainelConfig({
 
   const repor = () => {
     setEmpresa({ ...EMPRESA_PADRAO });
-    setTipos([...TIPOS_PADRAO]);
+    setTipos(tiposParaConfig(TIPOS_PADRAO as string[]));
     toast.info("Valores repostos para os padrão.");
   };
 
@@ -201,36 +242,97 @@ function PainelConfig({
       <div>
         <h3 className="font-bold text-sm text-blue-100 mb-3 uppercase tracking-wide border-b border-white/10 pb-2">
           Tipos de Movimento
+          <span className="ml-2 text-[10px] text-slate-400 font-normal normal-case tracking-normal">Clica num tipo para editar o nome e a cor</span>
         </h3>
-        <div className="space-y-1.5 mb-3 max-h-52 overflow-y-auto pr-1">
-          {tipos.map(t => (
-            <div key={t} className="flex items-center justify-between bg-[#11161f] border border-white/10 rounded px-3 py-2">
-              <div className="flex items-center gap-2">
-                <GripVertical className="w-3.5 h-3.5 text-slate-500" />
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${BADGE_MAP[t] || "bg-[#232c3d] text-slate-300"}`}>{t}</span>
+        <div className="space-y-1.5 mb-3 max-h-64 overflow-y-auto pr-1">
+          {tipos.map((t, idx) => (
+            <div key={idx} className="bg-[#11161f] border border-white/10 rounded overflow-hidden">
+              {/* Linha principal */}
+              <div className="flex items-center gap-2 px-3 py-2">
+                <GripVertical className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                {/* Preview badge com a cor actual */}
+                <span
+                  className="text-[10px] font-bold px-2 py-0.5 rounded border shrink-0"
+                  style={{
+                    background: t.cor + "22",
+                    color: t.cor,
+                    borderColor: t.cor + "66",
+                  }}
+                >
+                  {t.nome || "..."}
+                </span>
+                <button
+                  onClick={() => setEditandoIdx(editandoIdx === idx ? null : idx)}
+                  className="flex-1 text-left text-[10px] text-slate-400 hover:text-slate-200 truncate"
+                  title="Editar nome e cor"
+                >
+                  {editandoIdx === idx ? "Fechar edição" : "Editar"}
+                </button>
+                <button
+                  onClick={() => removerTipo(idx)}
+                  className="text-red-400 hover:text-red-300 transition-colors p-0.5 shrink-0"
+                  title="Remover tipo"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                onClick={() => removerTipo(t)}
-                className="text-red-400 hover:text-red-400 transition-colors p-0.5"
-                title="Remover tipo"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              {/* Painel de edição inline */}
+              {editandoIdx === idx && (
+                <div className="px-3 pb-3 pt-1 border-t border-white/10 bg-[#0d1420] flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-[9px] text-slate-500 uppercase tracking-wide block mb-1">Nome</label>
+                    <input
+                      type="text"
+                      value={t.nome}
+                      onChange={e => actualizarNome(idx, e.target.value)}
+                      className="w-full text-xs border border-white/15 rounded px-2 py-1 focus:border-blue-500 outline-none text-slate-200 bg-[#141b29] uppercase"
+                      placeholder="NOME DO TIPO"
+                    />
+                  </div>
+                  <div className="shrink-0">
+                    <label className="text-[9px] text-slate-500 uppercase tracking-wide block mb-1">Cor</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={t.cor}
+                        onChange={e => actualizarCor(idx, e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                        title="Escolher cor"
+                      />
+                      <span className="text-[9px] font-mono text-slate-400">{t.cor}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={novoTipo}
-            onChange={e => setNovoTipo(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && adicionarTipo()}
-            placeholder="Novo tipo (ex: TRANSFERÊNCIA)..."
-            className="flex-1 text-xs border-2 border-white/15 rounded px-3 py-2 focus:border-blue-500 outline-none uppercase placeholder-gray-400"
-          />
-          <Button size="sm" onClick={adicionarTipo} className="h-9 text-xs bg-[#0f2744] hover:bg-[#1e3a5c] text-white gap-1">
-            <Plus className="w-3 h-3" /> Adicionar
-          </Button>
+        {/* Adicionar novo tipo */}
+        <div className="bg-[#0d1420] border border-white/10 rounded p-3">
+          <p className="text-[10px] text-slate-400 mb-2 font-semibold uppercase tracking-wide">Adicionar novo tipo</p>
+          <div className="flex gap-2 items-center">
+            <input
+              type="text"
+              value={novoNome}
+              onChange={e => setNovoNome(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && adicionarTipo()}
+              placeholder="Nome do tipo..."
+              className="flex-1 text-xs border border-white/15 rounded px-2 py-1.5 focus:border-blue-500 outline-none uppercase placeholder-gray-500 bg-[#141b29] text-slate-200"
+            />
+            <div className="flex items-center gap-1 shrink-0">
+              <input
+                type="color"
+                value={novaCor}
+                onChange={e => setNovaCor(e.target.value)}
+                className="w-7 h-7 rounded cursor-pointer border-0 bg-transparent p-0"
+                title="Cor do novo tipo"
+              />
+              <span className="text-[9px] font-mono text-slate-500 w-14">{novaCor}</span>
+            </div>
+            <Button size="sm" onClick={adicionarTipo} className="h-7 text-xs bg-[#0f2744] hover:bg-[#1e3a5c] text-white gap-1 shrink-0">
+              <Plus className="w-3 h-3" /> Adicionar
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -339,7 +441,7 @@ export default function Home() {
   // ─── Config local (sincronizada com servidor) ────────────
   const [config, setConfig] = useState<Config>({
     empresa: EMPRESA_PADRAO,
-    tipos: TIPOS_PADRAO as string[],
+    tipos: tiposParaConfig(TIPOS_PADRAO as string[]),
   });
 
   useEffect(() => {
@@ -350,7 +452,7 @@ export default function Home() {
           nif: configData.empresaNif,
           morada: configData.empresaMorada,
         },
-        tipos: configData.tipos,
+        tipos: tiposParaConfig(configData.tipos),
       });
     }
   }, [configData]);
@@ -718,7 +820,14 @@ export default function Home() {
   }, [abaActiva, guardarMesNoServidor]);
 
   const { movimentos, docGerado, finalizado, mes, ano } = estadoActivo;
-  const tiposActivos = config.tipos as TipoMovimento[];
+  // tiposActivos: array de nomes (strings) para usar nos selects e filtros
+  const tiposActivos = config.tipos.map(t => t.nome) as TipoMovimento[];
+  // mapa de cor por nome de tipo (para badges inline)
+  const corPorTipo = useMemo(() => {
+    const m: Record<string, string> = {};
+    config.tipos.forEach(t => { m[t.nome] = t.cor; });
+    return m;
+  }, [config.tipos]);
 
   // ─── Filtro por tipo ──────────────────────────────────────
   const movimentosFiltrados = useMemo(() => {
@@ -841,7 +950,7 @@ export default function Home() {
 
   const gerarDocumento = () => {
     const doc = gerarDocumentoFinal(movimentos, mes, config.empresa);
-    if (!doc) { toast.error("Nenhuma linha marcada como FATURA."); return; }
+    if (!doc) { toast.error("Nenhuma linha marcada como FATURA SERVIÇO."); return; }
     actualizarMesActivo({ docGerado: doc });
     setMostrarDoc(true);
     toast.success("Documento gerado!");
@@ -890,15 +999,15 @@ export default function Home() {
       empresaNome: cfg.empresa.nome,
       empresaNif: cfg.empresa.nif,
       empresaMorada: cfg.empresa.morada,
-      tipos: cfg.tipos,
+      tipos: cfg.tipos.map(t => t.nome),
     });
   };
 
   // ─── Métricas ─────────────────────────────────────────────
-  const totalFaturas = totalPorTipo(movimentos, "FATURA");
+  const totalFaturas = totalFaturasServico(movimentos);
   const baseTotal = calcularValorBase(totalFaturas);
   const dezPct = baseTotal * 0.1;
-  const numFaturas = movimentos.filter(m => m.tipo === "FATURA").length;
+  const numFaturas = movimentos.filter(m => m.tipo === "FATURA SERVIÇO" || m.tipo === "FATURA").length;
   const totalClassificados = movimentos.filter(m => m.tipo).length;
   const semTipo = movimentos.filter(m => !m.tipo).length;
 
@@ -1128,7 +1237,7 @@ export default function Home() {
 
           <div className="col-span-3 grid grid-cols-3 gap-3">
             {[
-              { label: "Total GERAR FATURA", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#60a5fa", bg: "#15314f" },
+              { label: "Total FATURA SERVIÇO", value: formatEur(totalFaturas), sub: `${numFaturas} linha${numFaturas !== 1 ? "s" : ""}`, color: "#60a5fa", bg: "#15314f" },
               { label: "Valor Base (÷ 1,23)", value: formatEur(baseTotal), sub: "Sem IVA", color: "#60a5fa", bg: "#11203a" },
               { label: "10% do Valor Base", value: formatEur(dezPct), sub: "Referência comissão", color: "#4ade80", bg: "#103a22" },
             ].map(({ label, value, sub, color, bg }) => (
@@ -1163,9 +1272,12 @@ export default function Home() {
                   const total = totalPorTipo(movimentos, tipo);
                   const count = movimentos.filter(m => m.tipo === tipo).length;
                   if (count === 0) return null;
-                  const badgeClass = BADGE_MAP[tipo] || "bg-[#232c3d] text-slate-300";
+                  const cor = corPorTipo[tipo];
+                  const bStyle = cor
+                    ? { background: cor + "22", color: cor, border: `1px solid ${cor}55` }
+                    : { background: "#232c3d", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)" };
                   return (
-                    <div key={tipo} className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold ${badgeClass}`}>
+                    <div key={tipo} className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-semibold" style={bStyle}>
                       <span>{tipo}</span>
                       <span className="font-mono">{formatEur(total)}</span>
                       <span className="opacity-70">({count})</span>
@@ -1320,10 +1432,14 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {movimentosFiltrados.map((mov, i) => {
-                      const rowClass = TIPO_ROW_CLASS[mov.tipo] || (i % 2 === 0 ? "bg-[#141b29]" : "bg-[#11161f]");
-                      const badgeClass = TIPO_BADGE_CLASS[mov.tipo];
+                      const cor = mov.tipo ? (corPorTipo[mov.tipo] || TIPO_BADGE_CLASS[mov.tipo] ? corPorTipo[mov.tipo] : null) : null;
+                      const rowBg = cor ? cor + "18" : (i % 2 === 0 ? "#141b29" : "#11161f");
+                      const rowBorder = cor ? cor : "transparent";
+                      const badgeStyle = cor
+                        ? { background: cor + "22", color: cor, border: `1px solid ${cor}66` }
+                        : { background: "#1c2433", color: "#94a3b8", border: "1px solid rgba(255,255,255,0.1)" };
                       return (
-                        <tr key={mov.id} className={`border-b border-white/5 hover:brightness-95 transition-all duration-75 ${rowClass}`} style={{height: '28px'}}>
+                        <tr key={mov.id} className="border-b border-white/5 hover:brightness-95 transition-all duration-75" style={{height: '28px', backgroundColor: rowBg, borderLeft: `3px solid ${rowBorder}`}}>
                           <td className="px-2 py-0.5 font-mono text-[10px] text-slate-400 font-medium border-r border-white/10 whitespace-nowrap">{mov.data}</td>
                           <td className="px-2 py-0.5 border-r border-white/10" style={{minWidth:'220px',maxWidth:'320px'}}>
                             <div className="flex items-start gap-1">
@@ -1340,7 +1456,7 @@ export default function Home() {
                           </td>
                           <td className="px-1 py-0.5 border-r border-white/10">
                             {finalizado ? (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0 rounded ${badgeClass || "bg-[#1c2433] text-slate-400"}`}>
+                              <span className="text-[10px] font-semibold px-1.5 py-0 rounded" style={badgeStyle}>
                                 {mov.tipo || "—"}
                               </span>
                             ) : (
@@ -1348,7 +1464,7 @@ export default function Home() {
                                 value={mov.tipo || "__none__"}
                                 onValueChange={(v) => atualizarTipo(mov.id, v === "__none__" ? "" as TipoMovimento : v as TipoMovimento)}
                               >
-                                <SelectTrigger className={`h-6 text-[10px] w-full font-semibold border-0 shadow-none ${badgeClass || "bg-[#1c2433] text-slate-300"}`}>
+                                <SelectTrigger className="h-6 text-[10px] w-full font-semibold border-0 shadow-none" style={badgeStyle}>
                                   <SelectValue placeholder="— tipo —" />
                                 </SelectTrigger>
                                 <SelectContent>
