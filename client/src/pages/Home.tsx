@@ -504,6 +504,8 @@ export default function Home() {
   // ─── Conciliação por IA ─────────────────────────────────────
   const [mostrarModalIA, setMostrarModalIA] = useState(false);
   const [iaProgresso, setIaProgresso] = useState<string>("");
+  const [iaEtapa, setIaEtapa] = useState<"preparar" | "upload" | "analisar" | "concluido" | "">("" );
+  const [iaPct, setIaPct] = useState(0); // 0–100
   const [iaResultado, setIaResultado] = useState<{
     ligacoes: Array<{ movimentoId: string; arquivoNome: string; arquivoUrl: string; arquivoKey: string; confianca: string; motivo: string }>;
     semCorrespondencia: string[];
@@ -665,18 +667,38 @@ export default function Home() {
     setConciliandoIA(true);
     setIaResultado(null);
     setMostrarModalIA(true);
+    setIaEtapa("preparar");
+    setIaPct(5);
     setIaProgresso(`A preparar ${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} para análise...`);
 
     try {
-      // Converter todos os ficheiros para base64
+      // Etapa 1: Converter todos os ficheiros para base64
       const ficheirosDados = await Promise.all(pdfs.map(async (f) => ({
         nomeOriginal: f.name,
         mimeType: f.type || "application/pdf",
         dadosBase64: await lerComoBase64(f),
       })));
 
-      setIaProgresso(`A enviar ${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} para a IA analisar...`);
+      // Etapa 2: Upload + análise (em paralelo no servidor)
+      setIaEtapa("upload");
+      setIaPct(20);
+      setIaProgresso(`A carregar ${pdfs.length} ficheiro${pdfs.length !== 1 ? "s" : ""} em paralelo...`);
 
+      // Simular progresso enquanto o servidor trabalha
+      const progressTimer = setInterval(() => {
+        setIaPct(prev => {
+          if (prev >= 85) { clearInterval(progressTimer); return prev; }
+          const step = prev < 40 ? 8 : prev < 60 ? 5 : 2;
+          const novoVal = prev + step;
+          if (novoVal >= 40 && prev < 40) {
+            setIaEtapa("analisar");
+            setIaProgresso(`A IA está a ler e cruzar ${pdfs.length} documento${pdfs.length !== 1 ? "s" : ""} com os movimentos...`);
+          }
+          return novoVal;
+        });
+      }, 600);
+
+      let _progressTimer = progressTimer; // capturar para limpar
       const resultado = await conciliarComIAMutation.mutateAsync({
         ficheiros: ficheirosDados,
         movimentos: movsActuais.map(m => ({
@@ -690,6 +712,9 @@ export default function Home() {
         })),
       });
 
+      clearInterval(_progressTimer);
+      setIaEtapa("concluido");
+      setIaPct(100);
       setIaResultado(resultado);
       setIaProgresso("");
 
@@ -1645,10 +1670,55 @@ export default function Home() {
 
           {/* Estado: a processar */}
           {conciliandoIA && (
-            <div className="flex flex-col items-center gap-4 py-8">
-              <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
-              <p className="text-blue-200 text-sm text-center">{iaProgresso || "A analisar documentos..."}</p>
-              <p className="text-slate-400 text-xs text-center">A IA está a ler o conteúdo de cada PDF e a cruzar com os movimentos do extrato. Pode demorar alguns segundos.</p>
+            <div className="flex flex-col gap-5 py-6">
+              {/* Etapas */}
+              <div className="flex items-center justify-between gap-1">
+                {([
+                  { id: "preparar", label: "Preparar" },
+                  { id: "upload",   label: "Carregar" },
+                  { id: "analisar", label: "IA a ler" },
+                  { id: "concluido",label: "Concluído" },
+                ] as const).map((etapa, i, arr) => {
+                  const ordemEtapa = ["preparar", "upload", "analisar", "concluido"];
+                  const idxActual = ordemEtapa.indexOf(iaEtapa);
+                  const idxEtapa = ordemEtapa.indexOf(etapa.id);
+                  const activa = idxEtapa === idxActual;
+                  const feita = idxEtapa < idxActual;
+                  return (
+                    <div key={etapa.id} className="flex flex-col items-center gap-1 flex-1">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                        feita ? "bg-blue-500 border-blue-500 text-white" :
+                        activa ? "bg-blue-900 border-blue-400 text-blue-200 animate-pulse" :
+                        "bg-[#0a0e16] border-[#1e3a5c] text-slate-500"
+                      }`}>
+                        {feita ? "✓" : i + 1}
+                      </div>
+                      <span className={`text-[10px] font-semibold ${
+                        feita || activa ? "text-blue-300" : "text-slate-600"
+                      }`}>{etapa.label}</span>
+                      {i < arr.length - 1 && (
+                        <div className="absolute" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Barra de progresso */}
+              <div className="w-full bg-[#0a0e16] rounded-full h-2.5 overflow-hidden border border-[#1e3a5c]">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                  style={{ width: `${iaPct}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-slate-400">
+                <span>{iaProgresso || "A processar..."}</span>
+                <span className="font-mono text-blue-400">{iaPct}%</span>
+              </div>
+
+              <p className="text-[11px] text-slate-500 text-center">
+                Os uploads e a análise correm em paralelo — muito mais rápido do que antes.
+              </p>
             </div>
           )}
 

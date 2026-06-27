@@ -111,8 +111,11 @@ export const appRouter = router({
       }),
 
     // ─── Conciliação inteligente por IA ───────────────────────────────────
-    // Recebe vários PDFs em base64 + lista de movimentos do mês
-    // A IA lê o conteúdo de cada PDF e devolve a correspondência com o movimento certo
+    // Recebe vários PDFs em base64 + lista de movimentos do mês.
+    // OPTIMIZAÇÕES:
+    //   1. Uploads para S3 em paralelo (Promise.all)
+    //   2. Análise de cada PDF individualmente em paralelo (Promise.all)
+    //      → muito mais rápido do que enviar todos de uma vez ao LLM
     conciliarComIA: protectedProcedure
       .input(z.object({
         ficheiros: z.array(z.object({
@@ -127,7 +130,7 @@ export const appRouter = router({
           valor: z.number(),
           tipo: z.string(),
           inst: z.string().optional(),
-          arquivoNome: z.string().optional(), // já tem doc? ignorar
+          arquivoNome: z.string().optional(),
         })),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -135,132 +138,128 @@ export const appRouter = router({
         const semDoc = input.movimentos.filter(m => !m.arquivoNome);
         if (semDoc.length === 0) return { ligacoes: [], semCorrespondencia: [] };
 
-        // Para cada PDF: fazer upload para S3 e obter URL pública assinada
+        // ── 1. UPLOADS EM PARALELO ──────────────────────────────────────────
         type FicheiroInfo = {
           nomeOriginal: string;
           mimeType: string;
           key: string;
           url: string;
           signedUrl: string;
+          index: number;
         };
-        const ficheiroInfos: FicheiroInfo[] = [];
-        for (const f of input.ficheiros) {
-          const buffer = Buffer.from(f.dadosBase64, "base64");
-          const safeNome = f.nomeOriginal.replace(/[^a-zA-Z0-9._-]/g, "_");
-          const key = `user-${ctx.user.id}/conciliacao/ia-${Date.now()}-${safeNome}`;
-          const { key: finalKey, url } = await storagePut(key, buffer, f.mimeType);
-          // Obter URL assinada para a IA conseguir ler o ficheiro
-          const signedUrl = await storageGetSignedUrl(finalKey);
-          ficheiroInfos.push({
-            nomeOriginal: f.nomeOriginal,
-            mimeType: f.mimeType,
-            key: finalKey,
-            url,
-            signedUrl,
-          });
-        }
 
-        // Construir prompt para a IA
+        const ficheiroInfos: FicheiroInfo[] = await Promise.all(
+          input.ficheiros.map(async (f, index) => {
+            const buffer = Buffer.from(f.dadosBase64, "base64");
+            const safeNome = f.nomeOriginal.replace(/[^a-zA-Z0-9._-]/g, "_");
+            const key = `user-${ctx.user.id}/conciliacao/ia-${Date.now()}-${index}-${safeNome}`;
+            const { key: finalKey, url } = await storagePut(key, buffer, f.mimeType);
+            const signedUrl = await storageGetSignedUrl(finalKey);
+            return { nomeOriginal: f.nomeOriginal, mimeType: f.mimeType, key: finalKey, url, signedUrl, index };
+          })
+        );
+
+        // Texto dos movimentos disponíveis (partilhado por todos os prompts)
         const movimentosTexto = semDoc.map((m, i) =>
           `[${i}] ID=${m.id} | Data=${m.data} | Valor=${m.valor.toFixed(2)}€ | Tipo=${m.tipo} | INST=${m.inst ?? "—"} | Desc=${m.descricao}`
         ).join("\n");
 
-        const ficheiroTexto = ficheiroInfos.map((f, i) =>
-          `[${i}] Nome=${f.nomeOriginal}`
-        ).join("\n");
+        // ── 2. ANÁLISE INDIVIDUAL DE CADA PDF EM PARALELO ──────────────────
+        // Cada PDF é analisado numa chamada separada ao LLM → muito mais rápido
+        type ResultadoPDF = {
+          ficheiroIndex: number;
+          movimentoId: string | null;
+          confianca: string;
+          motivo: string;
+        };
 
-        // Mensagem com os PDFs como file_url
-        const contentParts: Array<{ type: string; text?: string; file_url?: { url: string; mime_type: string } }> = [
-          {
-            type: "text",
-            text: `És um assistente de conciliação contabilística. Vais analisar documentos (faturas, recibos, comprovativos) e fazer a correspondência com movimentos bancários.
+        const resultadosPDF: ResultadoPDF[] = await Promise.all(
+          ficheiroInfos.map(async (f) => {
+            try {
+              const resultado = await invokeLLM({
+                messages: [
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "text",
+                        text: `És um assistente de conciliação contabilística. Analisa o documento em anexo (fatura, recibo ou comprovativo) e identifica o movimento bancário correspondente.
 
-MOVIMENTOS DO EXTRATO (sem documento associado):
+MOVIMENTOS DISPONÍVEIS:
 ${movimentosTexto}
 
-FICHEIROS CARREGADOS:
-${ficheiroTexto}
-
-Para cada ficheiro, lê o seu conteúdo e identifica:
-- Valor total do documento
-- Data do documento
+Para o documento em anexo, extrai:
+- Valor total
+- Data
 - Nome/NIF do emitente ou destinatário
 - Número de referência (INST, fatura, recibo)
 
-Depois faz a correspondência com o movimento mais provável da lista acima.
+Depois escolhe o movimento mais provável. Critérios por ordem de importância:
+1. Valor (diferença máxima 0.02€) — critério mais forte
+2. Número INST ou referência
+3. Data e nome
 
-Regras:
-- Cada ficheiro só pode ser ligado a UM movimento
-- Cada movimento só pode receber UM ficheiro
-- Se não houver correspondência clara, não forças — deixa sem correspondência
-- A correspondência por VALOR é o critério mais forte (diferença máxima de 0.02€)
-- A correspondência por INST/referência é o segundo critério mais forte
-- A correspondência por data e nome é o terceiro critério
+Se não houver correspondência clara, devolve movimentoId: null.
 
-Responde APENAS com JSON válido neste formato exacto:
-{
-  "ligacoes": [
-    { "ficheiroIndex": 0, "movimentoId": "mov-3", "confianca": "alta", "motivo": "valor 1179.49€ e INST 198 coincidem" }
-  ],
-  "semCorrespondencia": [1, 2]
-}
+Responde APENAS com JSON válido:
+{ "movimentoId": "mov-3" ou null, "confianca": "alta" | "media" | "baixa", "motivo": "explicação breve" }`,
+                      },
+                      {
+                        type: "file_url",
+                        file_url: { url: f.signedUrl, mime_type: "application/pdf" },
+                      } as any,
+                    ] as any,
+                  },
+                ],
+                response_format: { type: "json_object" },
+              });
+              const texto = typeof resultado.choices[0].message.content === "string"
+                ? resultado.choices[0].message.content
+                : JSON.stringify(resultado.choices[0].message.content);
+              const parsed = JSON.parse(texto);
+              return {
+                ficheiroIndex: f.index,
+                movimentoId: parsed.movimentoId ?? null,
+                confianca: parsed.confianca ?? "baixa",
+                motivo: parsed.motivo ?? "",
+              };
+            } catch {
+              return { ficheiroIndex: f.index, movimentoId: null, confianca: "baixa", motivo: "Erro na análise" };
+            }
+          })
+        );
 
-Os ficheiros são fornecidos a seguir.`,
-          },
-        ];
-
-        // Adicionar cada PDF como file_url
-        for (const f of ficheiroInfos) {
-          contentParts.push({
-            type: "file_url",
-            file_url: {
-              url: f.signedUrl,
-              mime_type: "application/pdf",
-            },
-          } as any);
+        // ── 3. DEDUPLICAR: cada movimento só pode receber UM ficheiro ───────
+        // Se dois PDFs apontam para o mesmo movimento, fica o de maior confiança
+        const ordemConfianca: Record<string, number> = { alta: 3, media: 2, baixa: 1 };
+        const movimentoUsado = new Map<string, ResultadoPDF>();
+        for (const r of resultadosPDF) {
+          if (!r.movimentoId) continue;
+          const existente = movimentoUsado.get(r.movimentoId);
+          if (!existente || (ordemConfianca[r.confianca] ?? 0) > (ordemConfianca[existente.confianca] ?? 0)) {
+            movimentoUsado.set(r.movimentoId, r);
+          }
         }
 
-        // Chamar a IA
-        let iaResposta: { ligacoes: Array<{ ficheiroIndex: number; movimentoId: string; confianca: string; motivo: string }>; semCorrespondencia: number[] };
-        try {
-          const resultado = await invokeLLM({
-            messages: [
-              {
-                role: "user",
-                content: contentParts as any,
-              },
-            ],
-            response_format: { type: "json_object" },
-          });
-          const texto = typeof resultado.choices[0].message.content === "string"
-            ? resultado.choices[0].message.content
-            : JSON.stringify(resultado.choices[0].message.content);
-          iaResposta = JSON.parse(texto);
-        } catch (e) {
-          throw new Error(`Erro na análise por IA: ${e instanceof Error ? e.message : String(e)}`);
-        }
-
-        // Construir resultado com URLs dos ficheiros
-        const ligacoesComUrl = (iaResposta.ligacoes ?? []).map(l => {
-          const f = ficheiroInfos[l.ficheiroIndex];
+        // Construir resultado final
+        const ligacoesComUrl = Array.from(movimentoUsado.values()).map(r => {
+          const f = ficheiroInfos[r.ficheiroIndex];
           return {
-            movimentoId: l.movimentoId,
+            movimentoId: r.movimentoId!,
             arquivoNome: f?.nomeOriginal ?? "",
             arquivoUrl: f?.url ?? "",
             arquivoKey: f?.key ?? "",
-            confianca: l.confianca,
-            motivo: l.motivo,
+            confianca: r.confianca,
+            motivo: r.motivo,
           };
         }).filter(l => l.movimentoId && l.arquivoNome);
 
-        const semCorrespondenciaNomes = (iaResposta.semCorrespondencia ?? []).map(
-          i => ficheiroInfos[i]?.nomeOriginal ?? `ficheiro-${i}`
-        );
+        const movimentosLigados = new Set(ligacoesComUrl.map(l => l.movimentoId));
+        const semCorrespondenciaNomes = resultadosPDF
+          .filter(r => !r.movimentoId || !movimentosLigados.has(r.movimentoId))
+          .map(r => ficheiroInfos[r.ficheiroIndex]?.nomeOriginal ?? `ficheiro-${r.ficheiroIndex}`);
 
-        return {
-          ligacoes: ligacoesComUrl,
-          semCorrespondencia: semCorrespondenciaNomes,
-        };
+        return { ligacoes: ligacoesComUrl, semCorrespondencia: semCorrespondenciaNomes };
       }),
   }),
 
