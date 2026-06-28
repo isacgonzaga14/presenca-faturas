@@ -821,6 +821,7 @@ export default function Home() {
               arquivoKey: lig.arquivoKey,
               nomeFatura: lig.arquivoNome,
               statusDoc: "conciliado" as const,
+              ivaFatura: (lig as any).ivaFatura ?? null,
             };
           });
           const novoEstado = { ...prev[idx], movimentos: novosMov };
@@ -1142,9 +1143,43 @@ export default function Home() {
     .filter(m => tiposSaida.includes(m.tipo as TipoMovimento))
     .reduce((s, m) => s + m.valor, 0);
 
-  // IVA A DEDUZIR: reservado — lógica a implementar futuramente
-  // (placeholder: 0 até o Isac passar a lógica)
-  const ivaADeduzir = 0;
+  // IVA A DEDUZIR: soma do IVA extraído das faturas de despesa do mês activo
+  const ivaMesActivo = movimentos
+    .filter(m => m.ivaFatura != null && m.ivaFatura > 0)
+    .reduce((s, m) => s + (m.ivaFatura ?? 0), 0);
+
+  // Acumulado trimestral: soma os mêses do trimestre corrente
+  // Trimestre 1: jan-mar | 2: abr-jun | 3: jul-set | 4: out-dez
+  const MESES_IDX: Record<string, number> = {
+    "janeiro":1,"fevereiro":2,"março":3,"abril":4,"maio":5,"junho":6,
+    "julho":7,"agosto":8,"setembro":9,"outubro":10,"novembro":11,"dezembro":12
+  };
+  const mesNumActivo = MESES_IDX[mes] ?? 1;
+  const trimestreActivo = Math.ceil(mesNumActivo / 3);
+  const mesesDoTrimestre = mesesSalvos.filter(m => {
+    const n = MESES_IDX[m.mes] ?? 0;
+    return m.ano === ano && Math.ceil(n / 3) === trimestreActivo;
+  });
+
+  // Verificar se algum mês do trimestre tem pagamento ao Estado (zera o acumulado)
+  const temPagamentoEstado = mesesDoTrimestre.some(m =>
+    m.movimentos.some(mv =>
+      mv.descricao?.toLowerCase().includes("pagamento ao estado") ||
+      mv.descricao?.toLowerCase().includes("pag estado iva") ||
+      mv.descricao?.toLowerCase().includes("at iva") ||
+      mv.tipo === "IVA"
+    )
+  );
+
+  const ivaAcumuladoTrimestre = temPagamentoEstado
+    ? 0  // já foi pago neste trimestre
+    : mesesDoTrimestre.reduce((total, m) =>
+        total + m.movimentos
+          .filter(mv => mv.ivaFatura != null && mv.ivaFatura > 0)
+          .reduce((s, mv) => s + (mv.ivaFatura ?? 0), 0)
+      , 0);
+
+  const ivaADeduzir = ivaAcumuladoTrimestre;
 
   // ─── Loading / Login ──────────────────────────────────────
   if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
@@ -1412,19 +1447,38 @@ export default function Home() {
             </div>
 
             {/* IVA A DEDUZIR */}
-            <div className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: "#1a1a0d", borderTop: "4px solid #eab308" }}>
-              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">IVA a Deduzir</div>
-              <div className="font-mono font-bold text-2xl text-yellow-400">
-                {ivaADeduzir === 0 ? <span className="text-slate-500 text-sm font-normal">A configurar</span> : formatEur(ivaADeduzir)}
+            <div className="rounded-lg p-4 shadow-sm border border-white/10" style={{ background: "#1a1a0d", borderTop: `4px solid ${temPagamentoEstado ? "#22c55e" : "#eab308"}` }}>
+              <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">
+                IVA a Deduzir
+                <span className="ml-2 text-slate-500 font-normal normal-case">
+                  T{trimestreActivo}/{ano}
+                </span>
+              </div>
+              <div className="font-mono font-bold text-2xl">
+                {temPagamentoEstado
+                  ? <span className="text-green-400 text-base font-semibold">Pago ao Estado ✔</span>
+                  : ivaADeduzir === 0
+                    ? <span className="text-slate-500 text-sm font-normal">Sem faturas com IVA</span>
+                    : <span className="text-yellow-400">{formatEur(ivaADeduzir)}</span>
+                }
               </div>
               <div className="mt-2 pt-2 border-t border-white/10 space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">IVA cobrado</span>
-                  <span className="text-amber-300 font-mono font-semibold">{formatEur(ivaEntrada)}</span>
+                  <span className="text-slate-400">IVA este mês</span>
+                  <span className="text-yellow-300 font-mono font-semibold">{formatEur(ivaMesActivo)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 italic">Lógica trimestral em breve</span>
+                  <span className="text-slate-400">Acumulado trimestre</span>
+                  <span className="text-amber-300 font-mono font-semibold">{formatEur(ivaAcumuladoTrimestre)}</span>
                 </div>
+                {!temPagamentoEstado && ivaAcumuladoTrimestre > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500 italic">IVA cobrado − IVA deduzido</span>
+                    <span className={`font-mono font-semibold ${
+                      ivaEntrada - ivaAcumuladoTrimestre >= 0 ? "text-red-300" : "text-green-300"
+                    }`}>{formatEur(ivaEntrada - ivaAcumuladoTrimestre)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1659,13 +1713,20 @@ export default function Home() {
                           </td>
                           <td className="px-2 py-0.5 border-r border-white/10 w-40">
                             {mov.arquivoNome ? (
-                              <div className="flex items-center gap-1">
-                                {mov.arquivoUrl ? (
-                                  <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title={mov.arquivoNome} className="text-[10px] text-blue-300 hover:text-blue-200 truncate block max-w-[130px] underline">
-                                    {mov.arquivoNome}
-                                  </a>
-                                ) : (
-                                  <span className="text-[10px] text-slate-300 truncate block max-w-[130px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  {mov.arquivoUrl ? (
+                                    <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title={mov.arquivoNome} className="text-[10px] text-blue-300 hover:text-blue-200 truncate block max-w-[130px] underline">
+                                      {mov.arquivoNome}
+                                    </a>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-300 truncate block max-w-[130px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
+                                  )}
+                                </div>
+                                {mov.ivaFatura != null && mov.ivaFatura > 0 && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-yellow-300 bg-yellow-500/15 px-1 py-0 rounded w-fit" title="IVA extraído da fatura">
+                                    IVA {formatEur(mov.ivaFatura)}
+                                  </span>
                                 )}
                               </div>
                             ) : (

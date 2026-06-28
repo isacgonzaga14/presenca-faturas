@@ -30,6 +30,8 @@ export interface Movimento {
   arquivoUrl?: string;    // URL persistente (/manus-storage/{key})
   arquivoKey?: string;    // chave S3 (para referência/limpeza futura)
   statusDoc?: "conciliado" | "sem_doc"; // calculado dinamicamente
+  // IVA extraído da fatura pelo extrator (null = não extraído / não aplicável)
+  ivaFatura?: number | null;
 }
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)

@@ -179,6 +179,7 @@ export const appRouter = router({
           movimentoId: string | null;
           confianca: string;
           motivo: string;
+          ivaFatura: number | null;
         };
 
         const resultadosPDF: ResultadoPDF[] = await Promise.all(
@@ -209,8 +210,10 @@ Depois escolhe o movimento mais provável. Critérios por ordem de importância:
 
 Se não houver correspondência clara, devolve movimentoId: null.
 
+Extrai também o valor do IVA do documento (campo IVA, IVA Normal, IVA 23%, Valor IVA, etc.). Se não encontrares IVA, devolve null.
+
 Responde APENAS com JSON válido:
-{ "movimentoId": "mov-3" ou null, "confianca": "alta" | "media" | "baixa", "motivo": "explicação breve" }`,
+{ "movimentoId": "mov-3" ou null, "confianca": "alta" | "media" | "baixa", "motivo": "explicação breve", "ivaFatura": 12.34 ou null }`,
                       },
                       {
                         type: "file_url",
@@ -230,9 +233,10 @@ Responde APENAS com JSON válido:
                 movimentoId: parsed.movimentoId ?? null,
                 confianca: parsed.confianca ?? "baixa",
                 motivo: parsed.motivo ?? "",
+                ivaFatura: typeof parsed.ivaFatura === "number" ? Math.round(parsed.ivaFatura * 100) / 100 : null,
               };
             } catch {
-              return { ficheiroIndex: f.index, movimentoId: null, confianca: "baixa", motivo: "Erro na análise" };
+              return { ficheiroIndex: f.index, movimentoId: null, confianca: "baixa", motivo: "Erro na análise", ivaFatura: null };
             }
           })
         );
@@ -259,6 +263,7 @@ Responde APENAS com JSON válido:
             arquivoKey: f?.key ?? "",
             confianca: r.confianca,
             motivo: r.motivo,
+            ivaFatura: r.ivaFatura ?? null,
           };
         }).filter(l => l.movimentoId && l.arquivoNome);
 
