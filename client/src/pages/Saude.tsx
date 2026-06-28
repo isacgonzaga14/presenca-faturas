@@ -208,6 +208,52 @@ export default function Saude() {
   const corLiquido = global.liquido >= 0 ? "#34d399" : "#f87171";
   const corDiferenca = conc.conciliado ? "#34d399" : Math.abs(conc.diferenca) < 50 ? "#fbbf24" : "#f87171";
 
+  // ─── Resumo trimestral de IVA ───────────────────────────────────────
+  const MESES_IDX_S: Record<string, number> = {
+    "janeiro":1,"fevereiro":2,"março":3,"abril":4,"maio":5,"junho":6,
+    "julho":7,"agosto":8,"setembro":9,"outubro":10,"novembro":11,"dezembro":12
+  };
+  const NOMES_MESES_S = ["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const anoActual = new Date().getFullYear();
+
+  const resumoTrimestral = useMemo(() => {
+    return [1,2,3,4].map(t => {
+      const mesesT = meses.filter(m => {
+        const n = MESES_IDX_S[m.mes] ?? 0;
+        const anoM = typeof m.ano === "number" ? m.ano : parseInt(m.ano as any);
+        return anoM === anoActual && Math.ceil(n / 3) === t;
+      });
+      // IVA cobrado nas entradas (RECEBIMENTO) do trimestre
+      const ivaCobradog = mesesT.reduce((s, m) => {
+        const entradas = m.movimentos
+          .filter(mv => mv.tipo === "RECEBIMENTO")
+          .reduce((a, mv) => a + mv.valor, 0);
+        return s + (entradas - entradas / 1.23);
+      }, 0);
+      // IVA deduzível das faturas de despesa do trimestre
+      const ivaDedutivel = mesesT.reduce((s, m) =>
+        s + m.movimentos
+          .filter(mv => mv.ivaFatura != null && (mv.ivaFatura as number) > 0)
+          .reduce((a, mv) => a + ((mv.ivaFatura as number) ?? 0), 0)
+      , 0);
+      // Pagamento ao Estado detectado
+      const pagoPago = mesesT.some(m =>
+        m.movimentos.some(mv =>
+          mv.descricao?.toLowerCase().includes("pagamento ao estado") ||
+          mv.descricao?.toLowerCase().includes("pag estado iva") ||
+          mv.descricao?.toLowerCase().includes("at iva") ||
+          mv.tipo === "IVA"
+        )
+      );
+      const saldoIva = ivaCobradog - ivaDedutivel;
+      const mesesNomes = mesesT.map(m => {
+        const n = MESES_IDX_S[m.mes] ?? 0;
+        return NOMES_MESES_S[n] || m.mes;
+      });
+      return { trimestre: t, ivaCobradog, ivaDedutivel, saldoIva, pagoPago, mesesNomes, temDados: mesesT.length > 0 };
+    });
+  }, [meses, anoActual]);
+
   return (
     <div className="min-h-screen bg-[#0a0e16] app-screen" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
       {/* HEADER */}
@@ -409,6 +455,62 @@ export default function Saude() {
             </div>
           )}
         </section>
+
+        {/* PAINEL TRIMESTRAL DE IVA */}
+        {!semDados && (
+          <section className="bg-[#141b29] border border-[#1e3a5c] rounded-lg p-5 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Landmark className="w-5 h-5 text-pink-400" />
+              <h2 className="text-base font-bold text-white">IVA Trimestral — {anoActual}</h2>
+              <span className="text-[10px] text-blue-300/50 font-mono ml-1">IVA cobrado − IVA dedutível = saldo a pagar ao Estado</span>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {resumoTrimestral.map(tr => {
+                const cor = tr.pagoPago ? "#34d399" : tr.temDados ? (tr.saldoIva > 0 ? "#f87171" : "#fbbf24") : "#475569";
+                return (
+                  <div key={tr.trimestre} className="bg-[#0a0e16] rounded-lg p-4 border" style={{ borderColor: cor + "40" }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] uppercase tracking-wide font-bold" style={{ color: cor }}>T{tr.trimestre}</span>
+                      {tr.mesesNomes.length > 0 && (
+                        <span className="text-[10px] text-blue-300/50">{tr.mesesNomes.join(" · ")}</span>
+                      )}
+                    </div>
+                    {tr.temDados ? (
+                      <>
+                        <div className="space-y-1.5 mb-3">
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-blue-300/60">IVA cobrado</span>
+                            <span className="font-mono text-pink-300">{formatEur(tr.ivaCobradog)}</span>
+                          </div>
+                          <div className="flex justify-between text-[11px]">
+                            <span className="text-blue-300/60">IVA dedutível</span>
+                            <span className="font-mono text-emerald-300">− {formatEur(tr.ivaDedutivel)}</span>
+                          </div>
+                          <div className="h-px bg-[#1e3a5c] my-1" />
+                          <div className="flex justify-between text-[12px] font-bold">
+                            <span style={{ color: cor }}>Saldo IVA</span>
+                            <span className="font-mono" style={{ color: cor }}>{formatEur(tr.saldoIva)}</span>
+                          </div>
+                        </div>
+                        {tr.pagoPago ? (
+                          <div className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-950/40 rounded px-2 py-1">
+                            <CheckCircle2 className="w-3 h-3" /> Pago ao Estado
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-[10px] text-red-300 bg-red-950/30 rounded px-2 py-1">
+                            <AlertTriangle className="w-3 h-3" /> Por pagar
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 italic mt-2">Sem dados</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* GRÁFICO */}
         {!semDados && (

@@ -22,6 +22,7 @@ import {
   Building2, CheckCircle2, Trash2, Plus, Settings, X, GripVertical,
   LogIn, LogOut, User, Filter, Wand2, Save, Cloud, CloudOff,
   Paperclip, FolderOpen, FileCheck2, FileX2, Download, ExternalLink,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -998,6 +999,23 @@ export default function Home() {
     if (estado) guardarMesNoServidor(estado);
   }, [abaActiva, mesesSalvos, guardarMesNoServidor]);
 
+  // ─── Edição inline do IVA por linha ──────────────────────
+  const [editandoIvaId, setEditandoIvaId] = useState<string | null>(null);
+  const [ivaEditVal, setIvaEditVal] = useState<string>("");
+
+  const atualizarIvaFatura = useCallback((id: string, valor: number | null) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m => m.id === id ? { ...m, ivaFatura: valor } : m);
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+  }, [abaActiva, guardarMesNoServidor]);
+
   const carregarFicheiro = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1181,6 +1199,23 @@ export default function Home() {
 
   const ivaADeduzir = ivaAcumuladoTrimestre;
 
+  // ─── Alerta de trimestre a fechar ─────────────────────────────
+  // Meses que fecham trimestre: março(3), junho(6), setembro(9), dezembro(12)
+  const MESES_FIM_TRIMESTRE = [3, 6, 9, 12];
+  const mesNumHoje = new Date().getMonth() + 1; // 1-12
+  const anoHoje = new Date().getFullYear();
+  const eUltimoMesTrimestre = MESES_FIM_TRIMESTRE.includes(mesNumHoje);
+  // Verificar se o trimestre actual do mês visualizado ainda não tem pagamento ao Estado
+  const trimestreAFechado = eUltimoMesTrimestre && !temPagamentoEstado && ivaAcumuladoTrimestre > 0 && ano === anoHoje;
+  // IVA cobrado no trimestre (entradas RECEBIMENTO)
+  const ivaCobradobTrimestre = mesesDoTrimestre.reduce((s, m) => {
+    const entradas = m.movimentos
+      .filter(mv => mv.tipo === "RECEBIMENTO")
+      .reduce((a, mv) => a + mv.valor, 0);
+    return s + (entradas - entradas / 1.23);
+  }, 0);
+  const saldoIvaTrimestre = ivaCobradobTrimestre - ivaAcumuladoTrimestre;
+
   // ─── Loading / Login ──────────────────────────────────────
   if (authLoading || (isAuthenticated && (configLoading || mesesLoading))) {
     return (
@@ -1255,6 +1290,30 @@ export default function Home() {
       </header>
 
       <NavSuperior />
+
+      {/* ALERTA DE TRIMESTRE A FECHAR */}
+      {trimestreAFechado && (
+        <div className="bg-amber-950/80 border-b-2 border-amber-500/60">
+          <div className="container py-2.5 flex items-center gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <div className="flex-1 text-sm text-amber-100">
+              <strong className="text-amber-300">Trimestre T{trimestreActivo} a fechar este mês</strong>
+              {" — "}
+              IVA cobrado: <span className="font-mono text-pink-300">{formatEur(ivaCobradobTrimestre)}</span>
+              {" · "}
+              IVA dedutível: <span className="font-mono text-emerald-300">{formatEur(ivaAcumuladoTrimestre)}</span>
+              {" · "}
+              <strong>Saldo a pagar ao Estado: <span className="font-mono text-amber-300">{formatEur(saldoIvaTrimestre)}</span></strong>
+            </div>
+            <a
+              href="/saude"
+              className="text-[11px] text-amber-300 hover:text-white border border-amber-600 hover:border-amber-400 px-2.5 py-1 rounded transition-colors flex-shrink-0"
+            >
+              Ver IVA trimestral →
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ABAS DE MESES */}
       <div className="bg-[#0f2744] border-b border-[#1e3a5c]">
@@ -1723,10 +1782,44 @@ export default function Home() {
                                     <span className="text-[10px] text-slate-300 truncate block max-w-[130px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
                                   )}
                                 </div>
-                                {mov.ivaFatura != null && mov.ivaFatura > 0 && (
-                                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-yellow-300 bg-yellow-500/15 px-1 py-0 rounded w-fit" title="IVA extraído da fatura">
-                                    IVA {formatEur(mov.ivaFatura)}
-                                  </span>
+                                {/* Badge IVA editável */}
+                                {editandoIvaId === mov.id ? (
+                                  <div className="flex items-center gap-0.5">
+                                    <span className="text-[9px] text-yellow-400 font-bold">IVA</span>
+                                    <input
+                                      autoFocus
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      value={ivaEditVal}
+                                      onChange={e => setIvaEditVal(e.target.value)}
+                                      onKeyDown={e => {
+                                        if (e.key === "Enter") {
+                                          const v = parseFloat(ivaEditVal);
+                                          atualizarIvaFatura(mov.id, isNaN(v) ? null : v);
+                                          setEditandoIvaId(null);
+                                        }
+                                        if (e.key === "Escape") setEditandoIvaId(null);
+                                      }}
+                                      onBlur={() => {
+                                        const v = parseFloat(ivaEditVal);
+                                        atualizarIvaFatura(mov.id, isNaN(v) ? null : v);
+                                        setEditandoIvaId(null);
+                                      }}
+                                      className="w-14 text-[9px] bg-yellow-500/20 border border-yellow-500/40 text-yellow-200 rounded px-1 py-0 outline-none"
+                                    />
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => { setEditandoIvaId(mov.id); setIvaEditVal(String(mov.ivaFatura ?? "")); }}
+                                    className="inline-flex items-center gap-0.5 text-[9px] font-bold text-yellow-300 bg-yellow-500/15 hover:bg-yellow-500/30 px-1 py-0 rounded w-fit transition-colors"
+                                    title={mov.ivaFatura != null && mov.ivaFatura > 0 ? "Clique para editar IVA" : "Clique para adicionar IVA"}
+                                  >
+                                    {mov.ivaFatura != null && mov.ivaFatura > 0
+                                      ? <>IVA {formatEur(mov.ivaFatura)} ✏️</>
+                                      : <span className="text-slate-500 font-normal">+ IVA</span>
+                                    }
+                                  </button>
                                 )}
                               </div>
                             ) : (
