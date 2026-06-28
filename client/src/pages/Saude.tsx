@@ -35,8 +35,8 @@ function lerSaldo(uid: string | number): DadosSaldo {
     const raw = localStorage.getItem(`saude-saldo-${uid}`);
     if (raw) return JSON.parse(raw);
   } catch { /* ignora */ }
-  // Saldo inicial padrão: 5.693,00 € (saldo bancário BPI 203,28 € + INST 120 de 5.490,72 € — receita dez/2025 recebida em jan/2026)
-  return { saldoInicial: 5693.00, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" };
+  // Saldo inicial padrão: 203,28 € (saldo bancário BPI em 01/01/2026 — confirmado pelo balancete 2025 e extrato jan/2026)
+  return { saldoInicial: 203.28, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" };
 }
 function gravarSaldo(uid: string | number, d: DadosSaldo) {
   try { localStorage.setItem(`saude-saldo-${uid}`, JSON.stringify(d)); } catch { /* ignora */ }
@@ -118,7 +118,7 @@ export default function Saude() {
   );
 
   // Estado: saldo + overrides de direção (persistidos no navegador)
-  const [saldo, setSaldo] = useState<DadosSaldo>({ saldoInicial: 5693.00, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" });
+  const [saldo, setSaldo] = useState<DadosSaldo>({ saldoInicial: 203.28, saldoInicialData: "01/01/2026", saldoReal: 0, saldoRealData: "" });
   const [saldoInicialTxt, setSaldoInicialTxt] = useState("");
   const [saldoRealTxt, setSaldoRealTxt] = useState("");
   const [overrides, setOverrides] = useState<Record<string, Direcao>>({});
@@ -128,8 +128,8 @@ export default function Saude() {
   useEffect(() => {
     const s = lerSaldo(uid);
     setSaldo(s);
-    // Se nunca foi guardado (saldo inicial = 0), pré-preenche com 5.693,00 € (203,28 + INST 120 de dez/2025)
-    const saldoInicialEfetivo = s.saldoInicial !== 0 ? s.saldoInicial : 5693.00;
+    // Se nunca foi guardado (saldo inicial = 0), pré-preenche com 203,28 € (saldo bancário BPI de 01/01/2026)
+    const saldoInicialEfetivo = s.saldoInicial !== 0 ? s.saldoInicial : 203.28;
     setSaldoInicialTxt(saldoInicialEfetivo ? String(saldoInicialEfetivo).replace(".", ",") : "");
     setSaldoRealTxt(s.saldoReal ? String(s.saldoReal).replace(".", ",") : "");
     setOverrides(lerDirecoes(uid));
@@ -198,7 +198,7 @@ export default function Saude() {
     rendimentos: 83064.00,
     gastos: 77227.84,
     resultado: 5836.16,
-    saldoBancario: 5693.00,
+    saldoBancario: 203.28,
     saldoCaixa: 5119.28,
     clientesEmAberto: 5490.72, // INST 120 — fatura dez/2025 paga em jan/2026
     ivaPagar: 4803.22,
@@ -359,7 +359,7 @@ export default function Saude() {
           <div className="mt-3 flex items-start gap-2 bg-blue-950/40 border border-blue-800/40 rounded p-2.5 text-[11px] text-blue-200/80">
             <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-blue-400" />
             <span>
-              <strong>Nota sobre o INST 120 (5.490,72 €):</strong> Este recebimento de janeiro 2026 corresponde à fatura de dezembro 2025 — já estava registado como cliente em aberto no balancete 2025 (conta 21111999). O saldo inicial de 2026 é <strong>5.693,00 €</strong> (203,28 € saldo BPI + 5.490,72 € INST 120 — receita de dez/2025 recebida em jan/2026, já registada no balancete como cliente em aberto).
+              <strong>Nota sobre o INST 120 (5.490,72 €):</strong> Este recebimento de janeiro 2026 corresponde à fatura de dezembro 2025 — já estava registado como cliente em aberto no balancete 2025 (conta 21111999). O saldo inicial de 2026 é <strong>203,28 €</strong> — saldo bancário BPI em 01/01/2026, confirmado pelo extracto e pelo balancete 2025 (conta 12). O INST 120 de 5.490,72 € já está registado como movimento de janeiro, pelo que não deve ser incluído no saldo inicial para evitar dupla contagem.
             </span>
           </div>
         </section>
