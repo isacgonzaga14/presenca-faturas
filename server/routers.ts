@@ -9,6 +9,7 @@ import {
 } from "./db";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import PDFDocument from "pdfkit";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -278,7 +279,7 @@ Responde APENAS com JSON válido:
 
   // ─── Relatório para o contabilista ───────────────────────────────────────
   relatorio: router({
-    gerarExcel: protectedProcedure
+    gerarPDF: protectedProcedure
       .input(z.object({
         mes: z.string(),
         ano: z.number(),
@@ -291,52 +292,191 @@ Responde APENAS com JSON válido:
           arquivoNome: z.string().optional(),
           arquivoUrl: z.string().optional(),
           statusDoc: z.string().optional(),
+          ivaFatura: z.number().optional(),
         })),
         empresaNome: z.string(),
         empresaNif: z.string(),
+        empresaMorada: z.string().optional(),
+        tipos: z.array(z.object({ nome: z.string(), cor: z.string() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Gerar CSV estruturado (compatível com Excel)
-        const linhas: string[] = [];
-        const sep = ";";
+        // ── Paleta de cores por tipo ──────────────────────────────────────────
+        const COR_PADRAO: Record<string, string> = {
+          "FATURA SERVIÇO": "#3b82f6",
+          "FATURA COMPRA": "#ef4444",
+          "RECIBO VERDE": "#22c55e",
+          "RECIBO": "#06b6d4",
+          "RECIBO SALÁRIO": "#f59e0b",
+          "MANUTENÇÃO DE CONTA": "#d97706",
+          "AVENÇA CONTAB": "#9333ea",
+          "RECEBIMENTO": "#10b981",
+          "SEG. SOCIAL": "#f97316",
+        };
+        const corMap: Record<string, string> = { ...COR_PADRAO };
+        if (input.tipos) {
+          for (const t of input.tipos) if (t.cor) corMap[t.nome] = t.cor;
+        }
+        const hexToRgb = (hex: string): [number, number, number] => {
+          const h = hex.replace("#", "");
+          return [
+            parseInt(h.slice(0, 2), 16),
+            parseInt(h.slice(2, 4), 16),
+            parseInt(h.slice(4, 6), 16),
+          ];
+        };
 
-        // Cabeçalho do relatório
-        linhas.push(`RELATÓRIO DE CONCILIAÇÃO CONTABILÍSTICA${sep}${sep}${sep}${sep}${sep}`);
-        linhas.push(`Empresa:${sep}${input.empresaNome}${sep}${sep}${sep}${sep}`);
-        linhas.push(`NIF:${sep}${input.empresaNif}${sep}${sep}${sep}${sep}`);
-        linhas.push(`Período:${sep}${input.mes.charAt(0).toUpperCase() + input.mes.slice(1)} ${input.ano}${sep}${sep}${sep}${sep}`);
-        linhas.push(`Gerado em:${sep}${new Date().toLocaleDateString("pt-PT")}${sep}${sep}${sep}${sep}`);
-        linhas.push(`${sep}${sep}${sep}${sep}${sep}`);
+        // ── Criar documento PDF ───────────────────────────────────────────────
+        const doc = new PDFDocument({ margin: 32, size: "A4", compress: true });
+        const chunks: Buffer[] = [];
+        doc.on("data", (c: Buffer) => chunks.push(c));
 
-        // Cabeçalho da tabela
-        linhas.push(`DATA${sep}DESCRIÇÃO${sep}VALOR (€)${sep}TIPO${sep}DOCUMENTO${sep}STATUS`);
+        const BG_PAGE   = "#0a0e16";
+        const BG_HEADER = "#0f2744";
+        const BG_ROW_A  = "#141b29";
+        const BG_ROW_B  = "#0d1520";
+        const ACCENT    = "#2563eb";
+        const TEXT_W    = "#ffffff";
+        const TEXT_SEC  = "#93c5fd";
+        const TEXT_MONO = "#e2e8f0";
+        const W = 595 - 64; // largura útil (A4 − margens)
 
-        // Linhas de movimentos
+        // ── Fundo da página ───────────────────────────────────────────────────
+        const fillPage = () => {
+          doc.rect(0, 0, 595, 842).fill(BG_PAGE);
+        };
+        fillPage();
+        doc.on("pageAdded", fillPage);
+
+        // ── Cabeçalho da empresa ──────────────────────────────────────────────
+        const mesLabel = input.mes.charAt(0).toUpperCase() + input.mes.slice(1);
+        doc.rect(32, 32, W, 64).fill(BG_HEADER);
+        doc.rect(32, 32, 4, 64).fill(ACCENT);
+        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(13)
+           .text(input.empresaNome, 44, 42, { width: W - 120 });
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(8)
+           .text(`NIF ${input.empresaNif}  ·  ${input.empresaMorada ?? ""}`, 44, 58, { width: W - 120 });
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(8)
+           .text(`Relatório · ${mesLabel} ${input.ano}  ·  Gerado em ${new Date().toLocaleDateString("pt-PT")}`, 44, 70, { width: W - 120 });
+
+        // Totais no canto direito do cabeçalho
+        const totalEntrada = input.movimentos.filter(m => m.tipo === "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
+        const totalSaida = input.movimentos.filter(m => m.tipo !== "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
+        const conciliados = input.movimentos.filter(m => m.statusDoc === "conciliado").length;
+        const semDoc = input.movimentos.filter(m => !m.statusDoc || m.statusDoc === "sem_doc").length;
+        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(9)
+           .text(`↑ ${totalEntrada.toFixed(2)} €`, 595 - 32 - 110, 38, { width: 110, align: "right" });
+        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(9)
+           .text(`↓ ${totalSaida.toFixed(2)} €`, 595 - 32 - 110, 52, { width: 110, align: "right" });
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
+           .text(`${conciliados} conciliados  ·  ${semDoc} sem doc`, 595 - 32 - 110, 68, { width: 110, align: "right" });
+
+        // ── Cabeçalho da tabela ───────────────────────────────────────────────
+        const Y_TABLE = 108;
+        const COL = { data: 32, desc: 100, valor: 340, tipo: 400, doc: 490, status: 548 };
+        doc.rect(32, Y_TABLE, W, 18).fill(ACCENT);
+        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(7.5);
+        doc.text("DATA",        COL.data,   Y_TABLE + 5, { width: 65 });
+        doc.text("DESCRIÇÃO",   COL.desc,   Y_TABLE + 5, { width: 235 });
+        doc.text("VALOR",       COL.valor,  Y_TABLE + 5, { width: 55, align: "right" });
+        doc.text("TIPO",        COL.tipo,   Y_TABLE + 5, { width: 85 });
+        doc.text("DOCUMENTO",   COL.doc,    Y_TABLE + 5, { width: 55 });
+        doc.text("STATUS",      COL.status, Y_TABLE + 5, { width: 47 });
+
+        // ── Linhas de movimentos ──────────────────────────────────────────────
+        let y = Y_TABLE + 18;
+        let rowIdx = 0;
+        const ROW_H = 22;
+        const PAGE_H = 842 - 32; // margem inferior
+
         for (const m of input.movimentos) {
-          const valor = m.valor.toFixed(2).replace(".", ",");
-          const doc = m.arquivoNome ?? m.nomeFatura ?? "—";
-          const status = m.statusDoc === "conciliado" ? "✓ Conciliado"
-            : m.statusDoc === "sem_doc" ? "⚠ Sem documento"
+          // Nova página se necessário
+          if (y + ROW_H > PAGE_H) {
+            doc.addPage();
+            y = 32;
+            // Repetir cabeçalho da tabela
+            doc.rect(32, y, W, 18).fill(ACCENT);
+            doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(7.5);
+            doc.text("DATA",        COL.data,   y + 5, { width: 65 });
+            doc.text("DESCRIÇÃO",   COL.desc,   y + 5, { width: 235 });
+            doc.text("VALOR",       COL.valor,  y + 5, { width: 55, align: "right" });
+            doc.text("TIPO",        COL.tipo,   y + 5, { width: 85 });
+            doc.text("DOCUMENTO",   COL.doc,    y + 5, { width: 55 });
+            doc.text("STATUS",      COL.status, y + 5, { width: 47 });
+            y += 18;
+          }
+
+          const bgRow = rowIdx % 2 === 0 ? BG_ROW_A : BG_ROW_B;
+          doc.rect(32, y, W, ROW_H).fill(bgRow);
+
+          // Badge de tipo com cor
+          const corHex = corMap[m.tipo] ?? "#6b7280";
+          const [r, g, b] = hexToRgb(corHex);
+          const corBg = `rgba(${r},${g},${b},0.15)`;
+          // pdfkit não suporta rgba directamente — usar fill com opacity
+          doc.save();
+          doc.rect(COL.tipo, y + 4, 83, 14).fillOpacity(0.18).fill(corHex);
+          doc.restore();
+
+          // Textos da linha
+          doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7).fillOpacity(1);
+          doc.text(m.data, COL.data, y + 7, { width: 65 });
+
+          doc.fillColor(TEXT_MONO).font("Helvetica").fontSize(6.5);
+          doc.text(m.descricao, COL.desc, y + 4, { width: 235, height: 16, ellipsis: true });
+
+          // Valor com cor (positivo/negativo)
+          const isEntrada = m.tipo === "RECEBIMENTO";
+          doc.fillColor(isEntrada ? "#34d399" : "#f87171").font("Helvetica-Bold").fontSize(7.5);
+          doc.text(`${m.valor.toFixed(2)} €`, COL.valor, y + 7, { width: 55, align: "right" });
+
+          // Nome do tipo sobre o badge
+          doc.fillColor(corHex).font("Helvetica-Bold").fontSize(6.5);
+          doc.text(m.tipo, COL.tipo + 3, y + 7, { width: 77, ellipsis: true });
+
+          // Documento
+          const docNome = m.arquivoNome ?? m.nomeFatura ?? "—";
+          doc.fillColor(docNome !== "—" ? "#60a5fa" : "#475569").font("Helvetica").fontSize(6.5);
+          doc.text(docNome, COL.doc, y + 4, { width: 55, height: 16, ellipsis: true });
+          // IVA da fatura (se existir)
+          if (m.ivaFatura && m.ivaFatura > 0) {
+            doc.fillColor("#fbbf24").font("Helvetica").fontSize(5.5);
+            doc.text(`IVA ${m.ivaFatura.toFixed(2)} €`, COL.doc, y + 13, { width: 55 });
+          }
+
+          // Status
+          const statusTxt = m.statusDoc === "conciliado" ? "✓ OK"
+            : m.statusDoc === "sem_doc" ? "⚠ Falta"
             : "—";
-          // Escapar ponto e vírgula nos campos de texto
-          const esc = (s: string) => `"${s.replace(/"/g, '""')}"`;
-          linhas.push(`${m.data}${sep}${esc(m.descricao)}${sep}${valor}${sep}${esc(m.tipo)}${sep}${esc(doc)}${sep}${esc(status)}`);
+          const statusColor = m.statusDoc === "conciliado" ? "#34d399"
+            : m.statusDoc === "sem_doc" ? "#f87171"
+            : "#475569";
+          doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(7);
+          doc.text(statusTxt, COL.status, y + 7, { width: 47 });
+
+          y += ROW_H;
+          rowIdx++;
         }
 
-        // Totais
-        const totalGeral = input.movimentos.reduce((s, m) => s + m.valor, 0);
-        const conciliados = input.movimentos.filter(m => m.statusDoc === "conciliado").length;
-        const semDoc = input.movimentos.filter(m => m.statusDoc === "sem_doc").length;
-        linhas.push(`${sep}${sep}${sep}${sep}${sep}`);
-        linhas.push(`${sep}TOTAL${sep}${totalGeral.toFixed(2).replace(".", ",")}${sep}${sep}${sep}`);
-        linhas.push(`${sep}Conciliados${sep}${conciliados}${sep}${sep}${sep}`);
-        linhas.push(`${sep}Sem documento${sep}${semDoc}${sep}${sep}${sep}`);
+        // ── Rodapé com totais ─────────────────────────────────────────────────
+        if (y + 40 > PAGE_H) { doc.addPage(); y = 32; }
+        doc.rect(32, y + 4, W, 1).fill(ACCENT);
+        y += 12;
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
+           .text(`Total movimentos: ${input.movimentos.length}`, COL.data, y);
+        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(7)
+           .text(`Entradas: ${totalEntrada.toFixed(2)} €`, COL.desc, y);
+        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(7)
+           .text(`Saídas: ${totalSaida.toFixed(2)} €`, COL.valor - 20, y, { width: 80, align: "right" });
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
+           .text(`Conciliados: ${conciliados}  ·  Sem doc: ${semDoc}`, COL.tipo, y);
 
-        const csvContent = linhas.join("\n");
-        const buffer = Buffer.from("\uFEFF" + csvContent, "utf-8"); // BOM para Excel reconhecer UTF-8
-        const key = `user-${ctx.user.id}/relatorios/relatorio-${input.mes}-${input.ano}-${Date.now()}.csv`;
-        const { url } = await storagePut(key, buffer, "text/csv;charset=utf-8");
-        return { url, nome: `relatorio-conciliacao-${input.mes}-${input.ano}.csv` };
+        // ── Finalizar e guardar ───────────────────────────────────────────────
+        doc.end();
+        await new Promise<void>(resolve => doc.on("end", resolve));
+        const pdfBuffer = Buffer.concat(chunks);
+        const key = `user-${ctx.user.id}/relatorios/relatorio-${input.mes}-${input.ano}-${Date.now()}.pdf`;
+        const { url } = await storagePut(key, pdfBuffer, "application/pdf");
+        return { url, nome: `Relatorio-${mesLabel}-${input.ano}.pdf` };
       }),
   }),
 });

@@ -601,7 +601,7 @@ export default function Home() {
   const [conciliandoIA, setConciliandoIA] = useState(false);
   const pastaIARef = useRef<HTMLInputElement>(null);
   const conciliarComIAMutation = trpc.ficheiros.conciliarComIA.useMutation();
-  const gerarRelatorioMutation = trpc.relatorio.gerarExcel.useMutation();
+  const gerarRelatorioMutation = trpc.relatorio.gerarPDF.useMutation();
 
   // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
@@ -867,9 +867,12 @@ export default function Home() {
           arquivoNome: m.arquivoNome,
           arquivoUrl: m.arquivoUrl,
           statusDoc: m.statusDoc,
+          ivaFatura: m.ivaFatura ?? undefined,
         })),
         empresaNome: config.empresa.nome,
         empresaNif: config.empresa.nif,
+        empresaMorada: config.empresa.morada,
+        tipos: config.tipos.map(t => ({ nome: t.nome, cor: t.cor })),
       });
       // Download directo
       const a = document.createElement("a");
@@ -1657,7 +1660,7 @@ export default function Home() {
                     <Button variant="outline" size="sm" disabled={gerarRelatorioMutation.isPending} onClick={exportarRelatorioServidor} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório de conciliação para o contabilista (Excel/CSV)">
                       {gerarRelatorioMutation.isPending
                         ? <><div className="w-3 h-3 border-2 border-green-300 border-t-transparent rounded-full animate-spin" /> A gerar...</>
-                        : <><Download className="w-3 h-3" /> Relatório Contabilista</>}
+                        : <><Download className="w-3 h-3" /> Relatório</>}
                     </Button>
                   )}
                   {!finalizado && (
