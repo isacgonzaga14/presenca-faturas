@@ -293,6 +293,7 @@ Responde APENAS com JSON válido:
           arquivoUrl: z.string().optional(),
           statusDoc: z.string().optional(),
           ivaFatura: z.number().optional(),
+          anotacao: z.string().optional(),
         })),
         empresaNome: z.string(),
         empresaNif: z.string(),
@@ -326,149 +327,170 @@ Responde APENAS com JSON válido:
         };
 
         // ── Criar documento PDF ───────────────────────────────────────────────
-        const doc = new PDFDocument({ margin: 32, size: "A4", compress: true });
+        const doc = new PDFDocument({ margin: 18, size: "A4", compress: true });
         const chunks: Buffer[] = [];
         doc.on("data", (c: Buffer) => chunks.push(c));
 
-        const BG_PAGE   = "#0a0e16";
-        const BG_HEADER = "#0f2744";
-        const BG_ROW_A  = "#141b29";
-        const BG_ROW_B  = "#0d1520";
+        // Paleta clara
+        const BG_HEADER = "#1e3a5c";
+        const BG_TH     = "#1e3a5c";
+        const BG_ROW_A  = "#f8fafc";
+        const BG_ROW_B  = "#eef2f7";
         const ACCENT    = "#2563eb";
         const TEXT_W    = "#ffffff";
-        const TEXT_SEC  = "#93c5fd";
-        const TEXT_MONO = "#e2e8f0";
-        const W = 595 - 64; // largura útil (A4 − margens)
+        const TEXT_DARK = "#1e293b";
+        const TEXT_SEC  = "#475569";
+        const BORDER    = "#cbd5e1";
+        const M = 18;
+        const W = 595 - M * 2;
 
-        // ── Fundo da página ───────────────────────────────────────────────────
-        const fillPage = () => {
-          doc.rect(0, 0, 595, 842).fill(BG_PAGE);
-        };
-        fillPage();
-        doc.on("pageAdded", fillPage);
+        // Fundo branco
+        doc.rect(0, 0, 595, 842).fill("#ffffff");
+        doc.on("pageAdded", () => doc.rect(0, 0, 595, 842).fill("#ffffff"));
 
-        // ── Cabeçalho da empresa ──────────────────────────────────────────────
+        // ── Cabeçalho da empresa ──────────────────────────────────────────────────────────────────────
         const mesLabel = input.mes.charAt(0).toUpperCase() + input.mes.slice(1);
-        doc.rect(32, 32, W, 64).fill(BG_HEADER);
-        doc.rect(32, 32, 4, 64).fill(ACCENT);
-        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(13)
-           .text(input.empresaNome, 44, 42, { width: W - 120 });
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(8)
-           .text(`NIF ${input.empresaNif}  ·  ${input.empresaMorada ?? ""}`, 44, 58, { width: W - 120 });
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(8)
-           .text(`Relatório · ${mesLabel} ${input.ano}  ·  Gerado em ${new Date().toLocaleDateString("pt-PT")}`, 44, 70, { width: W - 120 });
+        const HDR_H = 50;
+        doc.rect(M, M, W, HDR_H).fill(BG_HEADER);
+        doc.rect(M, M, 4, HDR_H).fill(ACCENT);
+        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(11)
+           .text(input.empresaNome, M + 10, M + 7, { width: W - 130 });
+        doc.fillColor("#93c5fd").font("Helvetica").fontSize(7)
+           .text(`NIF ${input.empresaNif}  ·  ${input.empresaMorada ?? ""}`, M + 10, M + 21, { width: W - 130 });
+        doc.fillColor("#93c5fd").font("Helvetica").fontSize(7)
+           .text(`Relatório · ${mesLabel} ${input.ano}  ·  Gerado em ${new Date().toLocaleDateString("pt-PT")}`, M + 10, M + 32, { width: W - 130 });
 
-        // Totais no canto direito do cabeçalho
         const totalEntrada = input.movimentos.filter(m => m.tipo === "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
         const totalSaida = input.movimentos.filter(m => m.tipo !== "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
         const conciliados = input.movimentos.filter(m => m.statusDoc === "conciliado").length;
         const semDoc = input.movimentos.filter(m => !m.statusDoc || m.statusDoc === "sem_doc").length;
-        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(9)
-           .text(`↑ ${totalEntrada.toFixed(2)} €`, 595 - 32 - 110, 38, { width: 110, align: "right" });
-        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(9)
-           .text(`↓ ${totalSaida.toFixed(2)} €`, 595 - 32 - 110, 52, { width: 110, align: "right" });
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
-           .text(`${conciliados} conciliados  ·  ${semDoc} sem doc`, 595 - 32 - 110, 68, { width: 110, align: "right" });
+        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(8)
+           .text(`↑ ${totalEntrada.toFixed(2)} €`, 595 - M - 110, M + 9, { width: 110, align: "right" });
+        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(8)
+           .text(`↓ ${totalSaida.toFixed(2)} €`, 595 - M - 110, M + 22, { width: 110, align: "right" });
+        doc.fillColor("#93c5fd").font("Helvetica").fontSize(6.5)
+           .text(`${conciliados} conciliados  ·  ${semDoc} sem doc`, 595 - M - 110, M + 37, { width: 110, align: "right" });
 
-        // ── Cabeçalho da tabela ───────────────────────────────────────────────
-        const Y_TABLE = 108;
-        const COL = { data: 32, desc: 100, valor: 340, tipo: 400, doc: 490, status: 548 };
-        doc.rect(32, Y_TABLE, W, 18).fill(ACCENT);
-        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(7.5);
-        doc.text("DATA",        COL.data,   Y_TABLE + 5, { width: 65 });
-        doc.text("DESCRIÇÃO",   COL.desc,   Y_TABLE + 5, { width: 235 });
-        doc.text("VALOR",       COL.valor,  Y_TABLE + 5, { width: 55, align: "right" });
-        doc.text("TIPO",        COL.tipo,   Y_TABLE + 5, { width: 85 });
-        doc.text("DOCUMENTO",   COL.doc,    Y_TABLE + 5, { width: 55 });
-        doc.text("STATUS",      COL.status, Y_TABLE + 5, { width: 47 });
+        // ── Cabeçalho da tabela ──────────────────────────────────────────────────────────────────────
+        // Colunas: DATA(50) | DESC+TIPO(190) | VALOR(62) | DOC+NOTA(185) | STATUS(55)
+        const Y_TABLE = M + HDR_H + 4;
+        const COL = {
+          data:   M,
+          desc:   M + 50,
+          valor:  M + 240,
+          doc:    M + 302,
+          status: M + 487,
+        };
+        const TH_H = 15;
+        doc.rect(M, Y_TABLE, W, TH_H).fill(BG_TH);
+        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(6.5);
+        doc.text("DATA",              COL.data,   Y_TABLE + 4, { width: 48 });
+        doc.text("DESCRIÇÃO / TIPO",  COL.desc,   Y_TABLE + 4, { width: 188 });
+        doc.text("VALOR",             COL.valor,  Y_TABLE + 4, { width: 60, align: "right" });
+        doc.text("DOCUMENTO / NOTA",  COL.doc,    Y_TABLE + 4, { width: 183 });
+        doc.text("STATUS",            COL.status, Y_TABLE + 4, { width: 70 });
 
-        // ── Linhas de movimentos ──────────────────────────────────────────────
-        let y = Y_TABLE + 18;
+        // ── Linhas de movimentos ──────────────────────────────────────────────────────────────────────────
+        let y = Y_TABLE + TH_H;
         let rowIdx = 0;
-        const ROW_H = 22;
-        const PAGE_H = 842 - 32; // margem inferior
+        const PAGE_H = 842 - M;
+
+        const drawTH = (yPos: number) => {
+          doc.rect(M, yPos, W, TH_H).fill(BG_TH);
+          doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(6.5);
+          doc.text("DATA",              COL.data,   yPos + 4, { width: 48 });
+          doc.text("DESCRIÇÃO / TIPO",  COL.desc,   yPos + 4, { width: 188 });
+          doc.text("VALOR",             COL.valor,  yPos + 4, { width: 60, align: "right" });
+          doc.text("DOCUMENTO / NOTA",  COL.doc,    yPos + 4, { width: 183 });
+          doc.text("STATUS",            COL.status, yPos + 4, { width: 70 });
+        };
 
         for (const m of input.movimentos) {
-          // Nova página se necessário
+          const hasAnotacao = !!(m.anotacao && m.anotacao.trim());
+          const hasDoc = !!(m.arquivoNome ?? m.nomeFatura);
+          const ROW_H = (hasAnotacao && hasDoc) ? 30 : hasAnotacao ? 22 : 17;
+
           if (y + ROW_H > PAGE_H) {
             doc.addPage();
-            y = 32;
-            // Repetir cabeçalho da tabela
-            doc.rect(32, y, W, 18).fill(ACCENT);
-            doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(7.5);
-            doc.text("DATA",        COL.data,   y + 5, { width: 65 });
-            doc.text("DESCRIÇÃO",   COL.desc,   y + 5, { width: 235 });
-            doc.text("VALOR",       COL.valor,  y + 5, { width: 55, align: "right" });
-            doc.text("TIPO",        COL.tipo,   y + 5, { width: 85 });
-            doc.text("DOCUMENTO",   COL.doc,    y + 5, { width: 55 });
-            doc.text("STATUS",      COL.status, y + 5, { width: 47 });
-            y += 18;
+            y = M;
+            drawTH(y);
+            y += TH_H;
           }
 
           const bgRow = rowIdx % 2 === 0 ? BG_ROW_A : BG_ROW_B;
-          doc.rect(32, y, W, ROW_H).fill(bgRow);
+          doc.rect(M, y, W, ROW_H).fill(bgRow);
+          doc.rect(M, y + ROW_H - 0.5, W, 0.5).fill(BORDER);
 
-          // Badge de tipo com cor
+          // DATA
+          doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5).fillOpacity(1);
+          doc.text(m.data, COL.data, y + 4, { width: 48 });
+
+          // DESCRIÇÃO + TIPO badge
+          doc.fillColor(TEXT_DARK).font("Helvetica").fontSize(6.5);
+          doc.text(m.descricao, COL.desc, y + 2, { width: 188, height: 9, ellipsis: true });
           const corHex = corMap[m.tipo] ?? "#6b7280";
           const [r, g, b] = hexToRgb(corHex);
-          const corBg = `rgba(${r},${g},${b},0.15)`;
-          // pdfkit não suporta rgba directamente — usar fill com opacity
-          doc.save();
-          doc.rect(COL.tipo, y + 4, 83, 14).fillOpacity(0.18).fill(corHex);
-          doc.restore();
-
-          // Textos da linha
-          doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7).fillOpacity(1);
-          doc.text(m.data, COL.data, y + 7, { width: 65 });
-
-          doc.fillColor(TEXT_MONO).font("Helvetica").fontSize(6.5);
-          doc.text(m.descricao, COL.desc, y + 4, { width: 235, height: 16, ellipsis: true });
-
-          // Valor com cor (positivo/negativo)
-          const isEntrada = m.tipo === "RECEBIMENTO";
-          doc.fillColor(isEntrada ? "#34d399" : "#f87171").font("Helvetica-Bold").fontSize(7.5);
-          doc.text(`${m.valor.toFixed(2)} €`, COL.valor, y + 7, { width: 55, align: "right" });
-
-          // Nome do tipo sobre o badge
-          doc.fillColor(corHex).font("Helvetica-Bold").fontSize(6.5);
-          doc.text(m.tipo, COL.tipo + 3, y + 7, { width: 77, ellipsis: true });
-
-          // Documento
-          const docNome = m.arquivoNome ?? m.nomeFatura ?? "—";
-          doc.fillColor(docNome !== "—" ? "#60a5fa" : "#475569").font("Helvetica").fontSize(6.5);
-          doc.text(docNome, COL.doc, y + 4, { width: 55, height: 16, ellipsis: true });
-          // IVA da fatura (se existir)
-          if (m.ivaFatura && m.ivaFatura > 0) {
-            doc.fillColor("#fbbf24").font("Helvetica").fontSize(5.5);
-            doc.text(`IVA ${m.ivaFatura.toFixed(2)} €`, COL.doc, y + 13, { width: 55 });
+          if (m.tipo) {
+            doc.save();
+            doc.rect(COL.desc, y + 9, 82, 8).fillOpacity(0.15).fill(corHex);
+            doc.restore();
+            doc.fillColor(corHex).font("Helvetica-Bold").fontSize(5.5).fillOpacity(1);
+            doc.text(m.tipo, COL.desc + 2, y + 11, { width: 78, ellipsis: true });
           }
 
-          // Status
+          // VALOR
+          const isEntrada = m.tipo === "RECEBIMENTO";
+          doc.fillColor(isEntrada ? "#16a34a" : "#dc2626").font("Helvetica-Bold").fontSize(7.5);
+          doc.text(`${m.valor.toFixed(2)} €`, COL.valor, y + 4, { width: 60, align: "right" });
+
+          // DOCUMENTO + IVA + ANOTAÇÃO
+          const docNome = m.arquivoNome ?? m.nomeFatura ?? "";
+          if (docNome) {
+            doc.fillColor(ACCENT).font("Helvetica").fontSize(6.5);
+            doc.text(docNome, COL.doc, y + 2, { width: 183, height: 9, ellipsis: true });
+            if (m.ivaFatura && m.ivaFatura > 0) {
+              doc.fillColor("#b45309").font("Helvetica").fontSize(5.5);
+              doc.text(`IVA ${m.ivaFatura.toFixed(2)} €`, COL.doc, y + 10, { width: 100 });
+            }
+          }
+          if (hasAnotacao) {
+            const notaY = docNome ? y + 19 : y + 3;
+            doc.fillColor("#92400e").font("Helvetica").fontSize(5.5);
+            doc.text(`Nota: ${m.anotacao}`, COL.doc, notaY, { width: 183, height: 9, ellipsis: true });
+          }
+          if (!docNome && !hasAnotacao) {
+            doc.fillColor(BORDER).font("Helvetica").fontSize(6.5);
+            doc.text("—", COL.doc, y + 4, { width: 183 });
+          }
+
+          // STATUS
           const statusTxt = m.statusDoc === "conciliado" ? "✓ OK"
             : m.statusDoc === "sem_doc" ? "⚠ Falta"
+            : hasAnotacao ? "Nota"
             : "—";
-          const statusColor = m.statusDoc === "conciliado" ? "#34d399"
-            : m.statusDoc === "sem_doc" ? "#f87171"
-            : "#475569";
-          doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(7);
-          doc.text(statusTxt, COL.status, y + 7, { width: 47 });
+          const statusColor = m.statusDoc === "conciliado" ? "#16a34a"
+            : m.statusDoc === "sem_doc" ? "#dc2626"
+            : hasAnotacao ? "#b45309"
+            : TEXT_SEC;
+          doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(6.5);
+          doc.text(statusTxt, COL.status, y + 4, { width: 70 });
 
           y += ROW_H;
           rowIdx++;
         }
 
-        // ── Rodapé com totais ─────────────────────────────────────────────────
-        if (y + 40 > PAGE_H) { doc.addPage(); y = 32; }
-        doc.rect(32, y + 4, W, 1).fill(ACCENT);
-        y += 12;
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
-           .text(`Total movimentos: ${input.movimentos.length}`, COL.data, y);
-        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(7)
+        // ── Rodapé com totais ─────────────────────────────────────────────────────────────────────────────
+        if (y + 24 > PAGE_H) { doc.addPage(); y = M; }
+        doc.rect(M, y + 3, W, 1).fill(ACCENT);
+        y += 8;
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5)
+           .text(`Total: ${input.movimentos.length} movimentos`, COL.data, y);
+        doc.fillColor("#16a34a").font("Helvetica-Bold").fontSize(6.5)
            .text(`Entradas: ${totalEntrada.toFixed(2)} €`, COL.desc, y);
-        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(7)
-           .text(`Saídas: ${totalSaida.toFixed(2)} €`, COL.valor - 20, y, { width: 80, align: "right" });
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(7)
-           .text(`Conciliados: ${conciliados}  ·  Sem doc: ${semDoc}`, COL.tipo, y);
+        doc.fillColor("#dc2626").font("Helvetica-Bold").fontSize(6.5)
+           .text(`Saídas: ${totalSaida.toFixed(2)} €`, COL.valor, y, { width: 60, align: "right" });
+        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5)
+           .text(`Conciliados: ${conciliados}  ·  Sem doc: ${semDoc}`, COL.doc, y);
 
         // ── Finalizar e guardar ───────────────────────────────────────────────
         doc.end();

@@ -32,6 +32,8 @@ export interface Movimento {
   statusDoc?: "conciliado" | "sem_doc"; // calculado dinamicamente
   // IVA extraído da fatura pelo extrator (null = não extraído / não aplicável)
   ivaFatura?: number | null;
+  // Anotação manual para justificar ausência de documento ou outras observações
+  anotacao?: string;
 }
 
 // Tipos padrão (podem ser sobrescritos pelas configurações)

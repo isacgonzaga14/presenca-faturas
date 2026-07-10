@@ -868,6 +868,7 @@ export default function Home() {
           arquivoUrl: m.arquivoUrl,
           statusDoc: m.statusDoc,
           ivaFatura: m.ivaFatura ?? undefined,
+          anotacao: m.anotacao ?? undefined,
         })),
         empresaNome: config.empresa.nome,
         empresaNif: config.empresa.nif,
@@ -1005,6 +1006,38 @@ export default function Home() {
   // ─── Edição inline do IVA por linha ──────────────────────
   const [editandoIvaId, setEditandoIvaId] = useState<string | null>(null);
   const [ivaEditVal, setIvaEditVal] = useState<string>("");
+  const [editandoAnotacaoId, setEditandoAnotacaoId] = useState<string | null>(null);
+  const [anotacaoEditVal, setAnotacaoEditVal] = useState<string>("");
+
+  const atualizarAnotacao = useCallback((id: string, texto: string) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m => m.id === id ? { ...m, anotacao: texto || undefined } : m);
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+  }, [abaActiva, guardarMesNoServidor]);
+
+  const removerDocumento = useCallback((id: string) => {
+    setMesesSalvos(prev => {
+      const idx = prev.findIndex(m => chave(m.mes, m.ano) === abaActiva);
+      if (idx === -1) return prev;
+      const novosMov = prev[idx].movimentos.map(m => m.id === id
+        ? { ...m, arquivoNome: undefined, arquivoUrl: undefined, arquivoKey: undefined, nomeFatura: "", statusDoc: undefined, ivaFatura: null }
+        : m
+      );
+      const novoEstado = { ...prev[idx], movimentos: novosMov };
+      const novo = [...prev];
+      novo[idx] = novoEstado;
+      guardarMesNoServidor(novoEstado);
+      return novo;
+    });
+    toast.success("Documento removido.");
+  }, [abaActiva, guardarMesNoServidor]);
 
   const atualizarIvaFatura = useCallback((id: string, valor: number | null) => {
     setMesesSalvos(prev => {
@@ -1778,11 +1811,20 @@ export default function Home() {
                               <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1">
                                   {mov.arquivoUrl ? (
-                                    <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title={mov.arquivoNome} className="text-[10px] text-blue-300 hover:text-blue-200 truncate block max-w-[130px] underline">
+                                    <a href={mov.arquivoUrl} target="_blank" rel="noreferrer" title={mov.arquivoNome} className="text-[10px] text-blue-300 hover:text-blue-200 truncate block max-w-[120px] underline">
                                       {mov.arquivoNome}
                                     </a>
                                   ) : (
-                                    <span className="text-[10px] text-slate-300 truncate block max-w-[130px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
+                                    <span className="text-[10px] text-slate-300 truncate block max-w-[120px]" title={mov.arquivoNome}>{mov.arquivoNome}</span>
+                                  )}
+                                  {!finalizado && (
+                                    <button
+                                      onClick={() => { if (confirm("Remover o documento desta linha?")) removerDocumento(mov.id); }}
+                                      title="Remover documento"
+                                      className="flex-shrink-0 inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300 transition-colors"
+                                    >
+                                      <X className="w-2 h-2" />
+                                    </button>
                                   )}
                                 </div>
                                 {/* Badge IVA editável */}
@@ -1825,7 +1867,38 @@ export default function Home() {
                                   </button>
                                 )}
                               </div>
-                            ) : (
+                            ) : null}
+                            {/* Campo de Anotação — visível em todas as linhas */}
+                            {editandoAnotacaoId === mov.id ? (
+                              <div className="mt-0.5">
+                                <textarea
+                                  autoFocus
+                                  rows={2}
+                                  value={anotacaoEditVal}
+                                  onChange={e => setAnotacaoEditVal(e.target.value)}
+                                  onBlur={() => {
+                                    atualizarAnotacao(mov.id, anotacaoEditVal);
+                                    setEditandoAnotacaoId(null);
+                                  }}
+                                  onKeyDown={e => {
+                                    if (e.key === "Escape") { atualizarAnotacao(mov.id, anotacaoEditVal); setEditandoAnotacaoId(null); }
+                                  }}
+                                  placeholder="Escreve a anotação..."
+                                  className="w-full text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded px-1 py-0.5 outline-none resize-none"
+                                />
+                              </div>
+                            ) : mov.anotacao ? (
+                              <div className="mt-0.5 flex items-start gap-0.5 cursor-pointer" onClick={() => !finalizado && (setEditandoAnotacaoId(mov.id), setAnotacaoEditVal(mov.anotacao ?? ""))}>
+                                <span className="text-[9px] text-amber-300 bg-amber-500/10 px-1 py-0 rounded leading-tight flex-1 truncate" title={mov.anotacao}>📝 {mov.anotacao}</span>
+                              </div>
+                            ) : !finalizado ? (
+                              <button
+                                onClick={() => { setEditandoAnotacaoId(mov.id); setAnotacaoEditVal(""); }}
+                                className="mt-0.5 text-[9px] text-slate-600 hover:text-amber-400 transition-colors"
+                                title="Adicionar anotação"
+                              >+ nota</button>
+                            ) : null}
+                            {!mov.arquivoNome && !mov.anotacao && mov.statusDoc !== "sem_doc" && (
                               <span className="text-slate-600 text-[10px]">—</span>
                             )}
                           </td>
