@@ -470,10 +470,10 @@ export default function Saude() {
             className="w-full flex items-center justify-between p-5 hover:bg-[#0f2535] transition-colors"
           >
             <div className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-base font-bold text-white">Simulador de Contrato</h2>
+              <Calculator className="w-6 h-6 text-emerald-400" />
+              <h2 className="text-lg font-bold text-white">Simulador de Contrato</h2>
               <span
-                className="text-[10px] font-mono px-2 py-0.5 rounded border ml-1"
+                className="text-xs font-mono px-2 py-0.5 rounded border ml-1"
                 style={simConfig.modoReverso
                   ? { color: "#fbbf24", borderColor: "#78350f", background: "#1c1000" }
                   : { color: "#6ee7b7", borderColor: "#065f46", background: "#022c1a" }}
@@ -483,10 +483,10 @@ export default function Saude() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <div className="text-[10px] uppercase font-semibold" style={{ color: simConfig.modoReverso ? "#fbbf24" : "#6ee7b7" }}>
+                <div className="text-xs uppercase font-semibold" style={{ color: simConfig.modoReverso ? "#fbbf24" : "#6ee7b7" }}>
                   {simConfig.modoReverso ? "Margem resultante" : "Valor proposto"}
                 </div>
-                <div className="font-mono font-bold text-lg" style={{ color: simConfig.modoReverso ? (simResultado.viavel ? "#fbbf24" : "#f87171") : "#34d399" }}>
+                <div className="font-mono font-bold text-xl" style={{ color: simConfig.modoReverso ? (simResultado.viavel ? "#fbbf24" : "#f87171") : "#34d399" }}>
                   {simConfig.modoReverso ? `${simResultado.margemPercent.toFixed(1)}%` : formatEur(simResultado.valorContrato)}
                 </div>
               </div>
@@ -498,11 +498,11 @@ export default function Saude() {
             <div className="px-5 pb-5 border-t border-[#1e4a2a]">
               {/* Toggle Normal / Reverso */}
               <div className="pt-4 mb-4 flex items-center gap-3">
-                <span className="text-xs text-blue-300/70">Modo de cálculo:</span>
+                <span className="text-sm text-blue-300/80">Modo de cálculo:</span>
                 <div className="flex rounded overflow-hidden border border-[#1e3a5c]">
                   <button
                     onClick={() => actualizarSim("modoReverso", false)}
-                    className="px-4 py-1.5 text-xs font-semibold transition-colors"
+                    className="px-4 py-2 text-sm font-semibold transition-colors"
                     style={!simConfig.modoReverso
                       ? { background: "#065f46", color: "#6ee7b7" }
                       : { background: "#0a0e16", color: "#64748b" }}
@@ -511,7 +511,7 @@ export default function Saude() {
                   </button>
                   <button
                     onClick={() => actualizarSim("modoReverso", true)}
-                    className="px-4 py-1.5 text-xs font-semibold transition-colors border-l border-[#1e3a5c]"
+                    className="px-4 py-2 text-sm font-semibold transition-colors border-l border-[#1e3a5c]"
                     style={simConfig.modoReverso
                       ? { background: "#78350f", color: "#fbbf24" }
                       : { background: "#0a0e16", color: "#64748b" }}
@@ -519,7 +519,7 @@ export default function Saude() {
                     ↺ Reverso
                   </button>
                 </div>
-                <span className="text-[10px] text-blue-300/40">
+                <span className="text-xs text-blue-300/60">
                   {simConfig.modoReverso
                     ? "Insere o valor do contrato → calcula a margem resultante"
                     : "Define a margem desejada → calcula o valor do contrato"}
@@ -530,14 +530,14 @@ export default function Saude() {
 
                 {/* Coluna esquerda — campos editáveis */}
                 <div className="space-y-3">
-                  <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-2">Parâmetros de custo</div>
+                  <div className="text-sm uppercase tracking-wide text-emerald-300/80 font-semibold mb-2">Parâmetros de custo</div>
 
                   {/* Funcionários */}
                   <div className="bg-[#141b29] rounded p-3">
-                    <div className="text-[10px] uppercase text-blue-300/60 font-semibold mb-2">Equipa de trabalho</div>
+                    <div className="text-xs uppercase text-blue-300/80 font-semibold mb-2">Equipa de trabalho</div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[10px] text-blue-300/50">Nº funcionários</span>
+                        <span className="text-xs text-blue-300/70">Nº funcionários</span>
                         <input
                           type="number" min={1} step={1}
                           value={simConfig.numFuncionarios}
@@ -546,7 +546,7 @@ export default function Saude() {
                         />
                       </label>
                       <label className="flex flex-col gap-1">
-                        <span className="text-[10px] text-blue-300/50">Salário / func. (€)</span>
+                        <span className="text-xs text-blue-300/70">Salário / func. (€)</span>
                         <input
                           type="number" min={0} step={50}
                           value={simConfig.salarioPorFuncionario}
@@ -555,7 +555,7 @@ export default function Saude() {
                         />
                       </label>
                     </div>
-                    <div className="mt-2 text-[10px] text-emerald-300/60 font-mono">
+                    <div className="mt-2 text-xs text-emerald-300/80 font-mono font-semibold">
                       Salários: {formatEur(simResultado.salarios)}
                     </div>
                   </div>
@@ -563,7 +563,7 @@ export default function Saude() {
                   {/* Reserva fim de ano */}
                   <div className="bg-[#141b29] rounded p-3">
                     <label className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Reserva fim de ano (%)</span>
+                      <span className="text-xs uppercase text-blue-300/80 font-semibold">Reserva fim de ano (%)</span>
                       <div className="flex items-center gap-2">
                         <input
                           type="number" min={0} max={100} step={1}
@@ -571,18 +571,18 @@ export default function Saude() {
                           onChange={e => actualizarSim("reservaPercent", Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
                           className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
                         />
-                        <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.reserva)}</span>
+                        <span className="text-xs text-emerald-300/80 font-mono font-semibold">= {formatEur(simResultado.reserva)}</span>
                       </div>
-                      <span className="text-[10px] text-blue-300/40">Poupança mensal para subsídio de Natal/férias</span>
+                      <span className="text-xs text-blue-300/60">Poupança mensal para subsídio de Natal/férias</span>
                     </label>
                   </div>
 
                   {/* Pró-labore */}
                   <div className="bg-[#141b29] rounded p-3">
-                    <div className="text-[10px] uppercase text-blue-300/60 font-semibold mb-2">Gestão (pró-labore)</div>
+                    <div className="text-xs uppercase text-blue-300/80 font-semibold mb-2">Gestão (pró-labore)</div>
                     <div className="grid grid-cols-2 gap-3">
                       <label className="flex flex-col gap-1">
-                        <span className="text-[10px] text-blue-300/50">Pró-labore (€)</span>
+                        <span className="text-xs text-blue-300/70">Pró-labore (€)</span>
                         <input
                           type="number" min={0} step={50}
                           value={simConfig.proLabore}
@@ -591,7 +591,7 @@ export default function Saude() {
                         />
                       </label>
                       <label className="flex flex-col gap-1">
-                        <span className="text-[10px] text-blue-300/50">Taxa SS (%)</span>
+                        <span className="text-xs text-blue-300/70">Taxa SS (%)</span>
                         <input
                           type="number" min={0} max={100} step={0.5}
                           value={simConfig.ssTaxaProLabore}
@@ -600,7 +600,7 @@ export default function Saude() {
                         />
                       </label>
                     </div>
-                    <div className="mt-2 text-[10px] text-emerald-300/60 font-mono">
+                    <div className="mt-2 text-xs text-emerald-300/80 font-mono font-semibold">
                       SS pró-labore: {formatEur(simResultado.ssProLabore)}
                     </div>
                   </div>
@@ -608,10 +608,10 @@ export default function Saude() {
                   {/* Encargos patronais (opcional) */}
                   <div className="bg-[#141b29] rounded p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Encargos patronais s/ salários</span>
+                      <span className="text-xs uppercase text-blue-300/80 font-semibold">Encargos patronais s/ salários</span>
                       <button
                         onClick={() => actualizarSim("encargosPatronaisAtivos", !simConfig.encargosPatronaisAtivos)}
-                        className="flex items-center gap-1 text-[10px] transition-colors"
+                        className="flex items-center gap-1 text-xs transition-colors"
                         style={{ color: simConfig.encargosPatronaisAtivos ? "#34d399" : "#64748b" }}
                       >
                         {simConfig.encargosPatronaisAtivos
@@ -628,17 +628,17 @@ export default function Saude() {
                           onChange={e => actualizarSim("encargosPatronaisPercent", Math.max(0, parseFloat(e.target.value) || 0))}
                           className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
                         />
-                        <span className="text-[10px] text-emerald-300/60 font-mono">% = {formatEur(simResultado.encargosPatronais)}</span>
+                        <span className="text-xs text-emerald-300/80 font-mono font-semibold">% = {formatEur(simResultado.encargosPatronais)}</span>
                       </div>
                     ) : (
-                      <div className="text-[10px] text-blue-300/40 italic">Taxa padrão: 23,75% sobre salários brutos. Activar para incluir no cálculo.</div>
+                      <div className="text-xs text-blue-300/60 italic">Taxa padrão: 23,75% sobre salários brutos. Activar para incluir no cálculo.</div>
                     )}
                   </div>
 
                   {/* Contabilidade */}
                   <div className="bg-[#141b29] rounded p-3">
                     <label className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Contabilidade (€/mês)</span>
+                      <span className="text-xs uppercase text-blue-300/80 font-semibold">Contabilidade (€/mês)</span>
                       <input
                         type="number" min={0} step={10}
                         value={simConfig.contabilidade}
@@ -651,41 +651,41 @@ export default function Saude() {
 
                 {/* Coluna direita — resultado */}
                 <div className="space-y-3">
-                  <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-2">Resultado do cálculo</div>
+                  <div className="text-sm uppercase tracking-wide text-emerald-300/80 font-semibold mb-2">Resultado do cálculo</div>
 
                   {/* Tabela de custos — sempre visível */}
                   <div className="bg-[#141b29] rounded p-3">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-sm">
                       <tbody className="font-mono">
                         <tr className="border-b border-[#1e3a5c]">
-                          <td className="py-1.5 text-blue-200">Salários ({simConfig.numFuncionarios} × {formatEur(simConfig.salarioPorFuncionario)})</td>
-                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.salarios)}</td>
+                          <td className="py-2 text-blue-200">Salários ({simConfig.numFuncionarios} × {formatEur(simConfig.salarioPorFuncionario)})</td>
+                          <td className="py-2 text-right text-white font-semibold">{formatEur(simResultado.salarios)}</td>
                         </tr>
                         <tr className="border-b border-[#1e3a5c]">
-                          <td className="py-1.5 text-blue-200">Reserva fim de ano ({simConfig.reservaPercent}%)</td>
-                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.reserva)}</td>
+                          <td className="py-2 text-blue-200">Reserva fim de ano ({simConfig.reservaPercent}%)</td>
+                          <td className="py-2 text-right text-white font-semibold">{formatEur(simResultado.reserva)}</td>
                         </tr>
                         <tr className="border-b border-[#1e3a5c]">
-                          <td className="py-1.5 text-blue-200">Pró-labore</td>
-                          <td className="py-1.5 text-right text-white">{formatEur(simConfig.proLabore)}</td>
+                          <td className="py-2 text-blue-200">Pró-labore</td>
+                          <td className="py-2 text-right text-white font-semibold">{formatEur(simConfig.proLabore)}</td>
                         </tr>
                         <tr className="border-b border-[#1e3a5c]">
-                          <td className="py-1.5 text-blue-200">Seg. Social pró-labore ({simConfig.ssTaxaProLabore}%)</td>
-                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.ssProLabore)}</td>
+                          <td className="py-2 text-blue-200">Seg. Social pró-labore ({simConfig.ssTaxaProLabore}%)</td>
+                          <td className="py-2 text-right text-white font-semibold">{formatEur(simResultado.ssProLabore)}</td>
                         </tr>
                         {simConfig.encargosPatronaisAtivos && (
                           <tr className="border-b border-[#1e3a5c]">
-                            <td className="py-1.5 text-blue-200">Encargos patronais ({simConfig.encargosPatronaisPercent}%)</td>
-                            <td className="py-1.5 text-right text-white">{formatEur(simResultado.encargosPatronais)}</td>
+                            <td className="py-2 text-blue-200">Encargos patronais ({simConfig.encargosPatronaisPercent}%)</td>
+                            <td className="py-2 text-right text-white font-semibold">{formatEur(simResultado.encargosPatronais)}</td>
                           </tr>
                         )}
                         <tr className="border-b border-[#1e3a5c]">
-                          <td className="py-1.5 text-blue-200">Contabilidade</td>
-                          <td className="py-1.5 text-right text-white">{formatEur(simConfig.contabilidade)}</td>
+                          <td className="py-2 text-blue-200">Contabilidade</td>
+                          <td className="py-2 text-right text-white font-semibold">{formatEur(simConfig.contabilidade)}</td>
                         </tr>
                         <tr className="border-t-2 border-[#1e3a5c] font-bold">
-                          <td className="py-2 text-blue-100">Custo Total Operacional</td>
-                          <td className="py-2 text-right text-amber-300">{formatEur(simResultado.custoTotal)}</td>
+                          <td className="py-2.5 text-blue-100 text-base">Custo Total Operacional</td>
+                          <td className="py-2.5 text-right text-amber-300 text-base">{formatEur(simResultado.custoTotal)}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -695,7 +695,7 @@ export default function Saude() {
                   {!simConfig.modoReverso && (
                     <div className="bg-[#141b29] rounded p-3">
                       <label className="flex flex-col gap-1 mb-3">
-                        <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Margem de lucro alvo (%)</span>
+                        <span className="text-xs uppercase text-blue-300/80 font-semibold">Margem de lucro alvo (%)</span>
                         <div className="flex items-center gap-2">
                           <input
                             type="number" min={1} max={99} step={1}
@@ -703,21 +703,21 @@ export default function Saude() {
                             onChange={e => actualizarSim("margemPercent", Math.min(99, Math.max(1, parseFloat(e.target.value) || 20)))}
                             className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
                           />
-                          <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.margemEuros)}</span>
+                          <span className="text-xs text-emerald-300/80 font-mono font-semibold">= {formatEur(simResultado.margemEuros)}</span>
                         </div>
                       </label>
                       <div className="bg-[#0a2218] border border-emerald-700/50 rounded p-4 text-center">
-                        <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-1">Valor de Contrato Proposto</div>
+                        <div className="text-sm uppercase tracking-wide text-emerald-300/80 font-semibold mb-1">Valor de Contrato Proposto</div>
                         <div className="text-3xl font-bold font-mono text-emerald-300">{formatEur(simResultado.valorContrato)}</div>
-                        <div className="text-[10px] text-emerald-300/50 mt-1">excl. IVA · margem {simConfig.margemPercent}%</div>
-                        <div className="mt-3 pt-3 border-t border-emerald-800/40 grid grid-cols-2 gap-2 text-[10px] font-mono">
+                        <div className="text-xs text-emerald-300/70 mt-1">excl. IVA · margem {simConfig.margemPercent}%</div>
+                        <div className="mt-3 pt-3 border-t border-emerald-800/40 grid grid-cols-2 gap-2 text-xs font-mono">
                           <div>
-                            <div className="text-blue-300/50">Com IVA 23%</div>
-                            <div className="text-white font-bold">{formatEur(simResultado.valorContrato * 1.23)}</div>
+                            <div className="text-blue-300/60">Com IVA 23%</div>
+                            <div className="text-white font-bold text-sm">{formatEur(simResultado.valorContrato * 1.23)}</div>
                           </div>
                           <div>
-                            <div className="text-blue-300/50">Lucro mensal</div>
-                            <div className="text-emerald-300 font-bold">{formatEur(simResultado.margemEuros)}</div>
+                            <div className="text-blue-300/60">Lucro mensal</div>
+                            <div className="text-emerald-300 font-bold text-sm">{formatEur(simResultado.margemEuros)}</div>
                           </div>
                         </div>
                       </div>
@@ -728,7 +728,7 @@ export default function Saude() {
                   {simConfig.modoReverso && (
                     <div className="bg-[#141b29] rounded p-3">
                       <label className="flex flex-col gap-1 mb-3">
-                        <span className="text-[10px] uppercase text-amber-300/80 font-semibold">★ Valor do contrato recebido (€ excl. IVA)</span>
+                        <span className="text-sm uppercase text-amber-300/90 font-semibold">★ Valor do contrato recebido (€ excl. IVA)</span>
                         <input
                           type="number" min={0} step={100}
                           value={simConfig.valorContratoReverso}
@@ -736,7 +736,7 @@ export default function Saude() {
                           className="bg-[#0a0e16] border border-amber-700/60 rounded px-3 py-2 text-white font-mono text-base focus:border-amber-400 outline-none"
                           placeholder="Ex: 6597.50"
                         />
-                        <span className="text-[10px] text-blue-300/40">Valor acordado com o cliente, sem IVA</span>
+                        <span className="text-xs text-blue-300/60">Valor acordado com o cliente, sem IVA</span>
                       </label>
 
                       {/* Resultado do cálculo reverso */}
@@ -746,36 +746,36 @@ export default function Saude() {
                           ? { background: "#1c1000", borderColor: "#78350f" }
                           : { background: "#1a0000", borderColor: "#7f1d1d" }}
                       >
-                        <div className="text-[11px] uppercase tracking-wide font-semibold mb-1" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>
+                        <div className="text-sm uppercase tracking-wide font-semibold mb-1" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>
                           {simResultado.viavel ? "Margem Resultante" : "⚠ Contrato abaixo do custo"}
                         </div>
                         <div className="text-3xl font-bold font-mono" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>
                           {simResultado.margemPercent.toFixed(1)}%
                         </div>
-                        <div className="text-[10px] mt-1" style={{ color: simResultado.viavel ? "#d97706" : "#ef4444" }}>
+                        <div className="text-xs mt-1 font-semibold" style={{ color: simResultado.viavel ? "#d97706" : "#ef4444" }}>
                           {simResultado.viavel
                             ? `Lucro de ${formatEur(simResultado.margemEuros)}/mês`
                             : `Prejuízo de ${formatEur(Math.abs(simResultado.margemEuros))}/mês`}
                         </div>
-                        <div className="mt-3 pt-3 border-t grid grid-cols-3 gap-2 text-[10px] font-mono" style={{ borderColor: simResultado.viavel ? "#78350f" : "#7f1d1d" }}>
+                        <div className="mt-3 pt-3 border-t grid grid-cols-3 gap-2 text-xs font-mono" style={{ borderColor: simResultado.viavel ? "#78350f" : "#7f1d1d" }}>
                           <div>
-                            <div className="text-blue-300/50">Custo total</div>
-                            <div className="text-amber-200 font-bold">{formatEur(simResultado.custoTotal)}</div>
+                            <div className="text-blue-300/60">Custo total</div>
+                            <div className="text-amber-200 font-bold text-sm">{formatEur(simResultado.custoTotal)}</div>
                           </div>
                           <div>
-                            <div className="text-blue-300/50">Lucro (€)</div>
-                            <div className="font-bold" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>{formatEur(simResultado.margemEuros)}</div>
+                            <div className="text-blue-300/60">Lucro (€)</div>
+                            <div className="font-bold text-sm" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>{formatEur(simResultado.margemEuros)}</div>
                           </div>
                           <div>
-                            <div className="text-blue-300/50">Com IVA 23%</div>
-                            <div className="text-white font-bold">{formatEur(simConfig.valorContratoReverso * 1.23)}</div>
+                            <div className="text-blue-300/60">Com IVA 23%</div>
+                            <div className="text-white font-bold text-sm">{formatEur(simConfig.valorContratoReverso * 1.23)}</div>
                           </div>
                         </div>
                       </div>
 
                       {/* Barra visual de viabilidade */}
                       <div className="mt-3">
-                        <div className="flex justify-between text-[10px] text-blue-300/50 mb-1">
+                        <div className="flex justify-between text-xs text-blue-300/60 mb-1">
                           <span>Custo ({formatEur(simResultado.custoTotal)})</span>
                           <span>Contrato ({formatEur(simConfig.valorContratoReverso)})</span>
                         </div>
@@ -788,7 +788,7 @@ export default function Saude() {
                             }}
                           />
                         </div>
-                        <div className="text-[10px] text-blue-300/40 mt-1 text-center">
+                        <div className="text-xs text-blue-300/60 mt-1 text-center">
                           {simConfig.valorContratoReverso > 0
                             ? `${((simResultado.custoTotal / simConfig.valorContratoReverso) * 100).toFixed(1)}% do contrato vai para custos`
                             : "Insere um valor de contrato"}
@@ -800,7 +800,7 @@ export default function Saude() {
                   {/* Botão reset */}
                   <button
                     onClick={resetarSim}
-                    className="flex items-center gap-1.5 text-[11px] text-blue-300/60 hover:text-blue-200 transition-colors"
+                    className="flex items-center gap-1.5 text-xs text-blue-300/70 hover:text-blue-200 transition-colors"
                   >
                     <RotateCcw className="w-3 h-3" /> Repor valores padrão
                   </button>
