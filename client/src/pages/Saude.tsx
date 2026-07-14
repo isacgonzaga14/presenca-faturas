@@ -13,7 +13,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Building2, Activity, User, LogOut, Printer, Wallet, TrendingUp,
   TrendingDown, Scale, AlertTriangle, CheckCircle2, Landmark, FileText,
-  RefreshCw, Settings2, Info, BookOpen,
+  RefreshCw, Settings2, Info, BookOpen, Calculator, ChevronDown, ChevronUp,
+  ToggleLeft, ToggleRight, RotateCcw,
 } from "lucide-react";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
@@ -41,6 +42,56 @@ function lerSaldo(uid: string | number): DadosSaldo {
 function gravarSaldo(uid: string | number, d: DadosSaldo) {
   try { localStorage.setItem(`saude-saldo-${uid}`, JSON.stringify(d)); } catch { /* ignora */ }
 }
+// ─── Simulador de Contrato ───────────────────────────────────────────
+interface SimuladorConfig {
+  numFuncionarios: number;
+  salarioPorFuncionario: number;
+  reservaPercent: number;
+  proLabore: number;
+  ssTaxaProLabore: number;
+  encargosPatronaisAtivos: boolean;
+  encargosPatronaisPercent: number;
+  contabilidade: number;
+  margemPercent: number;
+}
+
+const SIMULADOR_PADRAO: SimuladorConfig = {
+  numFuncionarios: 4,
+  salarioPorFuncionario: 1000,
+  reservaPercent: 10,
+  proLabore: 600,
+  ssTaxaProLabore: 23,
+  encargosPatronaisAtivos: false,
+  encargosPatronaisPercent: 23.75,
+  contabilidade: 140,
+  margemPercent: 20,
+};
+
+function lerSimulador(uid: string | number): SimuladorConfig {
+  try {
+    const raw = localStorage.getItem(`simulador-contrato-${uid}`);
+    if (raw) return { ...SIMULADOR_PADRAO, ...JSON.parse(raw) };
+  } catch { /* ignora */ }
+  return { ...SIMULADOR_PADRAO };
+}
+function gravarSimulador(uid: string | number, d: SimuladorConfig) {
+  try { localStorage.setItem(`simulador-contrato-${uid}`, JSON.stringify(d)); } catch { /* ignora */ }
+}
+
+function calcularSimulador(c: SimuladorConfig) {
+  const salarios = c.numFuncionarios * c.salarioPorFuncionario;
+  const reserva = salarios * (c.reservaPercent / 100);
+  const ssProLabore = c.proLabore * (c.ssTaxaProLabore / 100);
+  const encargosPatronais = c.encargosPatronaisAtivos
+    ? salarios * (c.encargosPatronaisPercent / 100)
+    : 0;
+  const custoTotal = salarios + reserva + c.proLabore + ssProLabore + encargosPatronais + c.contabilidade;
+  // Fórmula: ValorContrato = CustoTotal / (1 - margem%/100)
+  const valorContrato = custoTotal / (1 - c.margemPercent / 100);
+  const margemEuros = valorContrato - custoTotal;
+  return { salarios, reserva, ssProLabore, encargosPatronais, custoTotal, valorContrato, margemEuros };
+}
+
 function lerDirecoes(uid: string | number): Record<string, Direcao> {
   try {
     const raw = localStorage.getItem(`saude-direcoes-${uid}`);
@@ -125,6 +176,10 @@ export default function Saude() {
   const [mostrarDirecoes, setMostrarDirecoes] = useState(false);
   const [relatorio, setRelatorio] = useState<null | "contabilista" | "conciliacao">(null);
 
+  // Simulador de Contrato
+  const [simConfig, setSimConfig] = useState<SimuladorConfig>(SIMULADOR_PADRAO);
+  const [simAberto, setSimAberto] = useState(true);
+
   useEffect(() => {
     const s = lerSaldo(uid);
     setSaldo(s);
@@ -133,6 +188,21 @@ export default function Saude() {
     setSaldoInicialTxt(saldoInicialEfetivo ? String(saldoInicialEfetivo).replace(".", ",") : "");
     setSaldoRealTxt(s.saldoReal ? String(s.saldoReal).replace(".", ",") : "");
     setOverrides(lerDirecoes(uid));
+    setSimConfig(lerSimulador(uid));
+  }, [uid]);
+
+  // Actualiza um campo do simulador e persiste
+  const actualizarSim = useCallback(<K extends keyof SimuladorConfig>(campo: K, valor: SimuladorConfig[K]) => {
+    setSimConfig(prev => {
+      const novo = { ...prev, [campo]: valor };
+      gravarSimulador(uid, novo);
+      return novo;
+    });
+  }, [uid]);
+
+  const resetarSim = useCallback(() => {
+    setSimConfig(SIMULADOR_PADRAO);
+    gravarSimulador(uid, SIMULADOR_PADRAO);
   }, [uid]);
 
   const guardarSaldo = useCallback(() => {
@@ -157,6 +227,9 @@ export default function Saude() {
   const conc = useMemo(() => conciliar(global, saldo), [global, saldo]);
   const diagnostico = useMemo(() => diagnosticarDiferenca(conc, global), [conc, global]);
   const ind = useMemo(() => indicadores(global), [global]);
+
+  // Cálculo em tempo real do simulador
+  const simResultado = useMemo(() => calcularSimulador(simConfig), [simConfig]);
 
   const dadosGrafico = useMemo(() => global.acumulado.map(a => {
     const r = global.meses.find(m => m.chave === a.chave)!;
@@ -371,6 +444,240 @@ export default function Saude() {
             <p className="text-sm mt-1">Importe e classifique os extratos na aba <strong>Gestão de Extratos</strong>. Esta página recolhe automaticamente esses dados.</p>
           </div>
         )}
+
+        {/* SIMULADOR DE CONTRATO */}
+        <section className="bg-[#0f1e35] border border-[#1e4a2a] rounded-lg mb-6 overflow-hidden">
+          {/* Cabeçalho clicável */}
+          <button
+            onClick={() => setSimAberto(v => !v)}
+            className="w-full flex items-center justify-between p-5 hover:bg-[#0f2535] transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-emerald-400" />
+              <h2 className="text-base font-bold text-white">Simulador de Contrato</h2>
+              <span className="text-[10px] text-emerald-300/50 font-mono ml-1">Calculadora de Custos Operacionais</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <div className="text-[10px] uppercase text-emerald-300/60 font-semibold">Valor proposto</div>
+                <div className="font-mono font-bold text-emerald-300 text-lg">{formatEur(simResultado.valorContrato)}</div>
+              </div>
+              {simAberto ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />}
+            </div>
+          </button>
+
+          {simAberto && (
+            <div className="px-5 pb-5 border-t border-[#1e4a2a]">
+              <div className="pt-4 grid md:grid-cols-2 gap-6">
+
+                {/* Coluna esquerda — campos editáveis */}
+                <div className="space-y-3">
+                  <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-2">Parâmetros de custo</div>
+
+                  {/* Funcionários */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <div className="text-[10px] uppercase text-blue-300/60 font-semibold mb-2">Equipa de trabalho</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] text-blue-300/50">Nº funcionários</span>
+                        <input
+                          type="number" min={1} step={1}
+                          value={simConfig.numFuncionarios}
+                          onChange={e => actualizarSim("numFuncionarios", Math.max(1, parseInt(e.target.value) || 1))}
+                          className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] text-blue-300/50">Salário / func. (€)</span>
+                        <input
+                          type="number" min={0} step={50}
+                          value={simConfig.salarioPorFuncionario}
+                          onChange={e => actualizarSim("salarioPorFuncionario", Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 text-[10px] text-emerald-300/60 font-mono">
+                      Salários: {formatEur(simResultado.salarios)}
+                    </div>
+                  </div>
+
+                  {/* Reserva fim de ano */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Reserva fim de ano (%)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" min={0} max={100} step={1}
+                          value={simConfig.reservaPercent}
+                          onChange={e => actualizarSim("reservaPercent", Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                          className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                        <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.reserva)}</span>
+                      </div>
+                      <span className="text-[10px] text-blue-300/40">Poupança mensal para subsídio de Natal/férias</span>
+                    </label>
+                  </div>
+
+                  {/* Pró-labore */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <div className="text-[10px] uppercase text-blue-300/60 font-semibold mb-2">Gestão (pró-labore)</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] text-blue-300/50">Pró-labore (€)</span>
+                        <input
+                          type="number" min={0} step={50}
+                          value={simConfig.proLabore}
+                          onChange={e => actualizarSim("proLabore", Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] text-blue-300/50">Taxa SS (%)</span>
+                        <input
+                          type="number" min={0} max={100} step={0.5}
+                          value={simConfig.ssTaxaProLabore}
+                          onChange={e => actualizarSim("ssTaxaProLabore", Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-2 text-[10px] text-emerald-300/60 font-mono">
+                      SS pró-labore: {formatEur(simResultado.ssProLabore)}
+                    </div>
+                  </div>
+
+                  {/* Encargos patronais (opcional) */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Encargos patronais s/ salários</span>
+                      <button
+                        onClick={() => actualizarSim("encargosPatronaisAtivos", !simConfig.encargosPatronaisAtivos)}
+                        className="flex items-center gap-1 text-[10px] transition-colors"
+                        style={{ color: simConfig.encargosPatronaisAtivos ? "#34d399" : "#64748b" }}
+                      >
+                        {simConfig.encargosPatronaisAtivos
+                          ? <ToggleRight className="w-4 h-4" />
+                          : <ToggleLeft className="w-4 h-4" />}
+                        {simConfig.encargosPatronaisAtivos ? "Activo" : "Inactivo"}
+                      </button>
+                    </div>
+                    {simConfig.encargosPatronaisAtivos ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" min={0} max={100} step={0.25}
+                          value={simConfig.encargosPatronaisPercent}
+                          onChange={e => actualizarSim("encargosPatronaisPercent", Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                        <span className="text-[10px] text-emerald-300/60 font-mono">% = {formatEur(simResultado.encargosPatronais)}</span>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-blue-300/40 italic">Taxa padrão: 23,75% sobre salários brutos. Activar para incluir no cálculo.</div>
+                    )}
+                  </div>
+
+                  {/* Contabilidade */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Contabilidade (€/mês)</span>
+                      <input
+                        type="number" min={0} step={10}
+                        value={simConfig.contabilidade}
+                        onChange={e => actualizarSim("contabilidade", Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-32 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Coluna direita — resultado */}
+                <div className="space-y-3">
+                  <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-2">Resultado do cálculo</div>
+
+                  {/* Tabela de custos */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <table className="w-full text-xs">
+                      <tbody className="font-mono">
+                        <tr className="border-b border-[#1e3a5c]">
+                          <td className="py-1.5 text-blue-200">Salários ({simConfig.numFuncionarios} × {formatEur(simConfig.salarioPorFuncionario)})</td>
+                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.salarios)}</td>
+                        </tr>
+                        <tr className="border-b border-[#1e3a5c]">
+                          <td className="py-1.5 text-blue-200">Reserva fim de ano ({simConfig.reservaPercent}%)</td>
+                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.reserva)}</td>
+                        </tr>
+                        <tr className="border-b border-[#1e3a5c]">
+                          <td className="py-1.5 text-blue-200">Pró-labore</td>
+                          <td className="py-1.5 text-right text-white">{formatEur(simConfig.proLabore)}</td>
+                        </tr>
+                        <tr className="border-b border-[#1e3a5c]">
+                          <td className="py-1.5 text-blue-200">Seg. Social pró-labore ({simConfig.ssTaxaProLabore}%)</td>
+                          <td className="py-1.5 text-right text-white">{formatEur(simResultado.ssProLabore)}</td>
+                        </tr>
+                        {simConfig.encargosPatronaisAtivos && (
+                          <tr className="border-b border-[#1e3a5c]">
+                            <td className="py-1.5 text-blue-200">Encargos patronais ({simConfig.encargosPatronaisPercent}%)</td>
+                            <td className="py-1.5 text-right text-white">{formatEur(simResultado.encargosPatronais)}</td>
+                          </tr>
+                        )}
+                        <tr className="border-b border-[#1e3a5c]">
+                          <td className="py-1.5 text-blue-200">Contabilidade</td>
+                          <td className="py-1.5 text-right text-white">{formatEur(simConfig.contabilidade)}</td>
+                        </tr>
+                        <tr className="border-t-2 border-[#1e3a5c] font-bold">
+                          <td className="py-2 text-blue-100">Custo Total Operacional</td>
+                          <td className="py-2 text-right text-amber-300">{formatEur(simResultado.custoTotal)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Margem e valor final */}
+                  <div className="bg-[#141b29] rounded p-3">
+                    <label className="flex flex-col gap-1 mb-3">
+                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Margem de lucro alvo (%)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number" min={1} max={99} step={1}
+                          value={simConfig.margemPercent}
+                          onChange={e => actualizarSim("margemPercent", Math.min(99, Math.max(1, parseFloat(e.target.value) || 20)))}
+                          className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                        />
+                        <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.margemEuros)}</span>
+                      </div>
+                    </label>
+
+                    {/* Valor de contrato — destaque */}
+                    <div className="bg-[#0a2218] border border-emerald-700/50 rounded p-4 text-center">
+                      <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-1">Valor de Contrato Proposto</div>
+                      <div className="text-3xl font-bold font-mono text-emerald-300">{formatEur(simResultado.valorContrato)}</div>
+                      <div className="text-[10px] text-emerald-300/50 mt-1">excl. IVA · margem {simConfig.margemPercent}%</div>
+                      <div className="mt-3 pt-3 border-t border-emerald-800/40 grid grid-cols-2 gap-2 text-[10px] font-mono">
+                        <div>
+                          <div className="text-blue-300/50">Com IVA 23%</div>
+                          <div className="text-white font-bold">{formatEur(simResultado.valorContrato * 1.23)}</div>
+                        </div>
+                        <div>
+                          <div className="text-blue-300/50">Lucro mensal</div>
+                          <div className="text-emerald-300 font-bold">{formatEur(simResultado.margemEuros)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Botão reset */}
+                  <button
+                    onClick={resetarSim}
+                    className="flex items-center gap-1.5 text-[11px] text-blue-300/60 hover:text-blue-200 transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Repor valores padrão
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
