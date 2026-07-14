@@ -14,8 +14,9 @@ import {
   Building2, Activity, User, LogOut, Printer, Wallet, TrendingUp,
   TrendingDown, Scale, AlertTriangle, CheckCircle2, Landmark, FileText,
   RefreshCw, Settings2, Info, BookOpen, Calculator, ChevronDown, ChevronUp,
-  ToggleLeft, ToggleRight, RotateCcw,
+  ToggleLeft, ToggleRight, RotateCcw, FileDown, X,
 } from "lucide-react";
+import { gerarPropostaPDF } from "@/lib/gerarPropostaPDF";
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, Tooltip as ReTooltip, Legend,
@@ -197,6 +198,12 @@ export default function Saude() {
   const [simConfig, setSimConfig] = useState<SimuladorConfig>(SIMULADOR_PADRAO);
   const [simAberto, setSimAberto] = useState(true);
 
+  // Modal PDF
+  const [modalPDF, setModalPDF] = useState(false);
+  const [pdfNomeCliente, setPdfNomeCliente] = useState("");
+  const [pdfNomeContrato, setPdfNomeContrato] = useState("Serviços de Portaria e Segurança");
+  const [pdfDataEmissao, setPdfDataEmissao] = useState("");
+
   useEffect(() => {
     const s = lerSaldo(uid);
     setSaldo(s);
@@ -270,6 +277,38 @@ export default function Saude() {
     for (const t of Object.keys(global.porTipo)) if (t !== "—" && !arr.includes(t)) arr.push(t);
     return arr;
   }, [global.porTipo]);
+
+  // ─── Geração de PDF da Proposta ──────────────────────────────────────
+  const gerarPDF = useCallback(() => {
+    gerarPropostaPDF({
+      nomeEmpresa: empresaNome || "PRESEÇOBRIGATÓRIA - UNIPESSOAL LDA",
+      nif: empresaNif || "518604870",
+      morada: empresaMorada || "Rua Miguel Pais, Nº 46, 1º F, Barreiro, 2830-356, Portugal",
+      nomeCliente: pdfNomeCliente,
+      nomeContrato: pdfNomeContrato,
+      dataEmissao: pdfDataEmissao,
+      numFuncionarios: simConfig.numFuncionarios,
+      salarioPorFuncionario: simConfig.salarioPorFuncionario,
+      reservaPercent: simConfig.reservaPercent,
+      proLabore: simConfig.proLabore,
+      ssTaxaProLabore: simConfig.ssTaxaProLabore,
+      encargosPatronaisAtivos: simConfig.encargosPatronaisAtivos,
+      encargosPatronaisPercent: simConfig.encargosPatronaisPercent,
+      contabilidade: simConfig.contabilidade,
+      salarios: simResultado.salarios,
+      reserva: simResultado.reserva,
+      ssProLabore: simResultado.ssProLabore,
+      encargosPatronais: simResultado.encargosPatronais,
+      custoTotal: simResultado.custoTotal,
+      modoReverso: simConfig.modoReverso,
+      margemPercent: simResultado.margemPercent,
+      margemEuros: simResultado.margemEuros,
+      valorContrato: simResultado.valorContrato,
+      valorContratoReverso: simConfig.valorContratoReverso,
+      viavel: simResultado.viavel,
+    });
+    setModalPDF(false);
+  }, [simConfig, simResultado, empresaNome, empresaNif, empresaMorada, pdfNomeCliente, pdfNomeContrato, pdfDataEmissao]);
 
   // ─── Impressão ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -797,13 +836,23 @@ export default function Saude() {
                     </div>
                   )}
 
-                  {/* Botão reset */}
-                  <button
-                    onClick={resetarSim}
-                    className="flex items-center gap-1.5 text-xs text-blue-300/70 hover:text-blue-200 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Repor valores padrão
-                  </button>
+                  {/* Botões de ação */}
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={resetarSim}
+                      className="flex items-center gap-1.5 text-xs text-blue-300/70 hover:text-blue-200 transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Repor valores padrão
+                    </button>
+                    <button
+                      onClick={() => setModalPDF(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded text-sm font-semibold transition-colors"
+                      style={{ background: "#065f46", color: "#6ee7b7" }}
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Gerar Proposta PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1093,6 +1142,109 @@ export default function Saude() {
           empresaNome={empresaNome} empresaNif={empresaNif}
           global={global} conc={conc} diagnostico={diagnostico} data={dataHoje}
         />
+      )}
+
+      {/* ───────── MODAL PDF ───────── */}
+      {modalPDF && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.75)" }}
+          onClick={e => { if (e.target === e.currentTarget) setModalPDF(false); }}
+        >
+          <div
+            className="w-full max-w-md mx-4 rounded-xl shadow-2xl"
+            style={{ background: "#0d1b2e", border: "1px solid #1e3a5c" }}
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#1e3a5c" }}>
+              <div className="flex items-center gap-2">
+                <FileDown className="w-5 h-5 text-emerald-400" />
+                <span className="text-base font-bold text-white">Gerar Proposta PDF</span>
+              </div>
+              <button onClick={() => setModalPDF(false)} className="text-blue-300/60 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Formulário */}
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-sm text-blue-300/70">
+                Preenche os dados do destinatário. Os valores do simulador serão incluídos automaticamente.
+              </p>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs uppercase font-semibold text-blue-300/80">Nome do cliente / empresa</span>
+                <input
+                  type="text"
+                  value={pdfNomeCliente}
+                  onChange={e => setPdfNomeCliente(e.target.value)}
+                  placeholder="Ex: Mirabilis Group — Lx Living"
+                  className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs uppercase font-semibold text-blue-300/80">Descrição do contrato</span>
+                <input
+                  type="text"
+                  value={pdfNomeContrato}
+                  onChange={e => setPdfNomeContrato(e.target.value)}
+                  placeholder="Ex: Serviços de Portaria e Segurança"
+                  className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs uppercase font-semibold text-blue-300/80">Data de emissão (opcional)</span>
+                <input
+                  type="text"
+                  value={pdfDataEmissao}
+                  onChange={e => setPdfDataEmissao(e.target.value)}
+                  placeholder="Ex: 14 de julho de 2026"
+                  className="bg-[#0a0e16] border border-[#1e3a5c] rounded px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
+                />
+              </label>
+
+              {/* Resumo do que vai no PDF */}
+              <div className="rounded p-3 text-xs" style={{ background: "#0a1a2e", border: "1px solid #1e3a5c" }}>
+                <div className="text-blue-300/60 font-semibold mb-2 uppercase">Resumo da proposta</div>
+                <div className="flex justify-between text-blue-200 mb-1">
+                  <span>Custo operacional</span>
+                  <span className="font-mono font-bold text-amber-300">{simResultado.custoTotal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
+                </div>
+                {!simConfig.modoReverso ? (
+                  <div className="flex justify-between text-blue-200">
+                    <span>Valor proposto (excl. IVA)</span>
+                    <span className="font-mono font-bold text-emerald-300">{simResultado.valorContrato.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-blue-200">
+                    <span>Margem resultante</span>
+                    <span className="font-mono font-bold" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>{simResultado.margemPercent.toFixed(1)}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Rodapé */}
+            <div className="px-6 py-4 border-t flex gap-3 justify-end" style={{ borderColor: "#1e3a5c" }}>
+              <button
+                onClick={() => setModalPDF(false)}
+                className="px-4 py-2 rounded text-sm font-semibold text-blue-300/70 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={gerarPDF}
+                className="flex items-center gap-2 px-5 py-2 rounded text-sm font-bold transition-colors"
+                style={{ background: "#065f46", color: "#6ee7b7" }}
+              >
+                <FileDown className="w-4 h-4" />
+                Descarregar PDF
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
