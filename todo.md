@@ -19,3 +19,6 @@
   - Cálculo em tempo real: custo total operacional + margem de lucro → valor de contrato proposto
   - Persistência em localStorage
   - Valores padrão da tabela do Isac (4 func × 1.000€, reserva 10%, pró-labore 600€, SS 23%, contab. 140€, margem 20%)
+
+## Novas tarefas
+- [x] Modo reverso no Simulador de Contrato: inserir valor do contrato → calcular margem, lucro e distribuição automática

@@ -53,6 +53,9 @@ interface SimuladorConfig {
   encargosPatronaisPercent: number;
   contabilidade: number;
   margemPercent: number;
+  // Modo reverso
+  modoReverso: boolean;
+  valorContratoReverso: number; // valor inserido pelo utilizador no modo reverso
 }
 
 const SIMULADOR_PADRAO: SimuladorConfig = {
@@ -65,6 +68,8 @@ const SIMULADOR_PADRAO: SimuladorConfig = {
   encargosPatronaisPercent: 23.75,
   contabilidade: 140,
   margemPercent: 20,
+  modoReverso: false,
+  valorContratoReverso: 6597.50,
 };
 
 function lerSimulador(uid: string | number): SimuladorConfig {
@@ -86,10 +91,22 @@ function calcularSimulador(c: SimuladorConfig) {
     ? salarios * (c.encargosPatronaisPercent / 100)
     : 0;
   const custoTotal = salarios + reserva + c.proLabore + ssProLabore + encargosPatronais + c.contabilidade;
-  // Fórmula: ValorContrato = CustoTotal / (1 - margem%/100)
+
+  if (c.modoReverso) {
+    // Modo reverso: o utilizador define o valor do contrato, o sistema calcula a margem
+    const valorContrato = c.valorContratoReverso;
+    const margemEuros = valorContrato - custoTotal;
+    const margemPercent = custoTotal > 0 ? (margemEuros / valorContrato) * 100 : 0;
+    const viavel = margemEuros >= 0;
+    return { salarios, reserva, ssProLabore, encargosPatronais, custoTotal, valorContrato, margemEuros, margemPercent, viavel };
+  }
+
+  // Modo normal: margem definida pelo utilizador, calcula o valor do contrato
   const valorContrato = custoTotal / (1 - c.margemPercent / 100);
   const margemEuros = valorContrato - custoTotal;
-  return { salarios, reserva, ssProLabore, encargosPatronais, custoTotal, valorContrato, margemEuros };
+  const margemPercent = c.margemPercent;
+  const viavel = true;
+  return { salarios, reserva, ssProLabore, encargosPatronais, custoTotal, valorContrato, margemEuros, margemPercent, viavel };
 }
 
 function lerDirecoes(uid: string | number): Record<string, Direcao> {
@@ -455,12 +472,23 @@ export default function Saude() {
             <div className="flex items-center gap-2">
               <Calculator className="w-5 h-5 text-emerald-400" />
               <h2 className="text-base font-bold text-white">Simulador de Contrato</h2>
-              <span className="text-[10px] text-emerald-300/50 font-mono ml-1">Calculadora de Custos Operacionais</span>
+              <span
+                className="text-[10px] font-mono px-2 py-0.5 rounded border ml-1"
+                style={simConfig.modoReverso
+                  ? { color: "#fbbf24", borderColor: "#78350f", background: "#1c1000" }
+                  : { color: "#6ee7b7", borderColor: "#065f46", background: "#022c1a" }}
+              >
+                {simConfig.modoReverso ? "↺ Modo Reverso" : "→ Modo Normal"}
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <div className="text-[10px] uppercase text-emerald-300/60 font-semibold">Valor proposto</div>
-                <div className="font-mono font-bold text-emerald-300 text-lg">{formatEur(simResultado.valorContrato)}</div>
+                <div className="text-[10px] uppercase font-semibold" style={{ color: simConfig.modoReverso ? "#fbbf24" : "#6ee7b7" }}>
+                  {simConfig.modoReverso ? "Margem resultante" : "Valor proposto"}
+                </div>
+                <div className="font-mono font-bold text-lg" style={{ color: simConfig.modoReverso ? (simResultado.viavel ? "#fbbf24" : "#f87171") : "#34d399" }}>
+                  {simConfig.modoReverso ? `${simResultado.margemPercent.toFixed(1)}%` : formatEur(simResultado.valorContrato)}
+                </div>
               </div>
               {simAberto ? <ChevronUp className="w-4 h-4 text-blue-400" /> : <ChevronDown className="w-4 h-4 text-blue-400" />}
             </div>
@@ -468,7 +496,37 @@ export default function Saude() {
 
           {simAberto && (
             <div className="px-5 pb-5 border-t border-[#1e4a2a]">
-              <div className="pt-4 grid md:grid-cols-2 gap-6">
+              {/* Toggle Normal / Reverso */}
+              <div className="pt-4 mb-4 flex items-center gap-3">
+                <span className="text-xs text-blue-300/70">Modo de cálculo:</span>
+                <div className="flex rounded overflow-hidden border border-[#1e3a5c]">
+                  <button
+                    onClick={() => actualizarSim("modoReverso", false)}
+                    className="px-4 py-1.5 text-xs font-semibold transition-colors"
+                    style={!simConfig.modoReverso
+                      ? { background: "#065f46", color: "#6ee7b7" }
+                      : { background: "#0a0e16", color: "#64748b" }}
+                  >
+                    → Normal
+                  </button>
+                  <button
+                    onClick={() => actualizarSim("modoReverso", true)}
+                    className="px-4 py-1.5 text-xs font-semibold transition-colors border-l border-[#1e3a5c]"
+                    style={simConfig.modoReverso
+                      ? { background: "#78350f", color: "#fbbf24" }
+                      : { background: "#0a0e16", color: "#64748b" }}
+                  >
+                    ↺ Reverso
+                  </button>
+                </div>
+                <span className="text-[10px] text-blue-300/40">
+                  {simConfig.modoReverso
+                    ? "Insere o valor do contrato → calcula a margem resultante"
+                    : "Define a margem desejada → calcula o valor do contrato"}
+                </span>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
 
                 {/* Coluna esquerda — campos editáveis */}
                 <div className="space-y-3">
@@ -595,7 +653,7 @@ export default function Saude() {
                 <div className="space-y-3">
                   <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-2">Resultado do cálculo</div>
 
-                  {/* Tabela de custos */}
+                  {/* Tabela de custos — sempre visível */}
                   <div className="bg-[#141b29] rounded p-3">
                     <table className="w-full text-xs">
                       <tbody className="font-mono">
@@ -633,38 +691,111 @@ export default function Saude() {
                     </table>
                   </div>
 
-                  {/* Margem e valor final */}
-                  <div className="bg-[#141b29] rounded p-3">
-                    <label className="flex flex-col gap-1 mb-3">
-                      <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Margem de lucro alvo (%)</span>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number" min={1} max={99} step={1}
-                          value={simConfig.margemPercent}
-                          onChange={e => actualizarSim("margemPercent", Math.min(99, Math.max(1, parseFloat(e.target.value) || 20)))}
-                          className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
-                        />
-                        <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.margemEuros)}</span>
-                      </div>
-                    </label>
-
-                    {/* Valor de contrato — destaque */}
-                    <div className="bg-[#0a2218] border border-emerald-700/50 rounded p-4 text-center">
-                      <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-1">Valor de Contrato Proposto</div>
-                      <div className="text-3xl font-bold font-mono text-emerald-300">{formatEur(simResultado.valorContrato)}</div>
-                      <div className="text-[10px] text-emerald-300/50 mt-1">excl. IVA · margem {simConfig.margemPercent}%</div>
-                      <div className="mt-3 pt-3 border-t border-emerald-800/40 grid grid-cols-2 gap-2 text-[10px] font-mono">
-                        <div>
-                          <div className="text-blue-300/50">Com IVA 23%</div>
-                          <div className="text-white font-bold">{formatEur(simResultado.valorContrato * 1.23)}</div>
+                  {/* MODO NORMAL: campo de margem + valor proposto */}
+                  {!simConfig.modoReverso && (
+                    <div className="bg-[#141b29] rounded p-3">
+                      <label className="flex flex-col gap-1 mb-3">
+                        <span className="text-[10px] uppercase text-blue-300/60 font-semibold">Margem de lucro alvo (%)</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number" min={1} max={99} step={1}
+                            value={simConfig.margemPercent}
+                            onChange={e => actualizarSim("margemPercent", Math.min(99, Math.max(1, parseFloat(e.target.value) || 20)))}
+                            className="w-24 bg-[#0a0e16] border border-[#1e3a5c] rounded px-2 py-1.5 text-white font-mono text-sm focus:border-emerald-500 outline-none"
+                          />
+                          <span className="text-[10px] text-emerald-300/60 font-mono">= {formatEur(simResultado.margemEuros)}</span>
                         </div>
-                        <div>
-                          <div className="text-blue-300/50">Lucro mensal</div>
-                          <div className="text-emerald-300 font-bold">{formatEur(simResultado.margemEuros)}</div>
+                      </label>
+                      <div className="bg-[#0a2218] border border-emerald-700/50 rounded p-4 text-center">
+                        <div className="text-[11px] uppercase tracking-wide text-emerald-300/70 font-semibold mb-1">Valor de Contrato Proposto</div>
+                        <div className="text-3xl font-bold font-mono text-emerald-300">{formatEur(simResultado.valorContrato)}</div>
+                        <div className="text-[10px] text-emerald-300/50 mt-1">excl. IVA · margem {simConfig.margemPercent}%</div>
+                        <div className="mt-3 pt-3 border-t border-emerald-800/40 grid grid-cols-2 gap-2 text-[10px] font-mono">
+                          <div>
+                            <div className="text-blue-300/50">Com IVA 23%</div>
+                            <div className="text-white font-bold">{formatEur(simResultado.valorContrato * 1.23)}</div>
+                          </div>
+                          <div>
+                            <div className="text-blue-300/50">Lucro mensal</div>
+                            <div className="text-emerald-300 font-bold">{formatEur(simResultado.margemEuros)}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* MODO REVERSO: campo de valor do contrato + margem calculada */}
+                  {simConfig.modoReverso && (
+                    <div className="bg-[#141b29] rounded p-3">
+                      <label className="flex flex-col gap-1 mb-3">
+                        <span className="text-[10px] uppercase text-amber-300/80 font-semibold">★ Valor do contrato recebido (€ excl. IVA)</span>
+                        <input
+                          type="number" min={0} step={100}
+                          value={simConfig.valorContratoReverso}
+                          onChange={e => actualizarSim("valorContratoReverso", Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="bg-[#0a0e16] border border-amber-700/60 rounded px-3 py-2 text-white font-mono text-base focus:border-amber-400 outline-none"
+                          placeholder="Ex: 6597.50"
+                        />
+                        <span className="text-[10px] text-blue-300/40">Valor acordado com o cliente, sem IVA</span>
+                      </label>
+
+                      {/* Resultado do cálculo reverso */}
+                      <div
+                        className="rounded p-4 text-center border"
+                        style={simResultado.viavel
+                          ? { background: "#1c1000", borderColor: "#78350f" }
+                          : { background: "#1a0000", borderColor: "#7f1d1d" }}
+                      >
+                        <div className="text-[11px] uppercase tracking-wide font-semibold mb-1" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>
+                          {simResultado.viavel ? "Margem Resultante" : "⚠ Contrato abaixo do custo"}
+                        </div>
+                        <div className="text-3xl font-bold font-mono" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>
+                          {simResultado.margemPercent.toFixed(1)}%
+                        </div>
+                        <div className="text-[10px] mt-1" style={{ color: simResultado.viavel ? "#d97706" : "#ef4444" }}>
+                          {simResultado.viavel
+                            ? `Lucro de ${formatEur(simResultado.margemEuros)}/mês`
+                            : `Prejuízo de ${formatEur(Math.abs(simResultado.margemEuros))}/mês`}
+                        </div>
+                        <div className="mt-3 pt-3 border-t grid grid-cols-3 gap-2 text-[10px] font-mono" style={{ borderColor: simResultado.viavel ? "#78350f" : "#7f1d1d" }}>
+                          <div>
+                            <div className="text-blue-300/50">Custo total</div>
+                            <div className="text-amber-200 font-bold">{formatEur(simResultado.custoTotal)}</div>
+                          </div>
+                          <div>
+                            <div className="text-blue-300/50">Lucro (€)</div>
+                            <div className="font-bold" style={{ color: simResultado.viavel ? "#fbbf24" : "#f87171" }}>{formatEur(simResultado.margemEuros)}</div>
+                          </div>
+                          <div>
+                            <div className="text-blue-300/50">Com IVA 23%</div>
+                            <div className="text-white font-bold">{formatEur(simConfig.valorContratoReverso * 1.23)}</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Barra visual de viabilidade */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-[10px] text-blue-300/50 mb-1">
+                          <span>Custo ({formatEur(simResultado.custoTotal)})</span>
+                          <span>Contrato ({formatEur(simConfig.valorContratoReverso)})</span>
+                        </div>
+                        <div className="h-3 bg-[#0a0e16] rounded overflow-hidden">
+                          <div
+                            className="h-full rounded transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, simConfig.valorContratoReverso > 0 ? (simResultado.custoTotal / simConfig.valorContratoReverso) * 100 : 100)}%`,
+                              background: simResultado.viavel ? "#d97706" : "#dc2626"
+                            }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-blue-300/40 mt-1 text-center">
+                          {simConfig.valorContratoReverso > 0
+                            ? `${((simResultado.custoTotal / simConfig.valorContratoReverso) * 100).toFixed(1)}% do contrato vai para custos`
+                            : "Insere um valor de contrato"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Botão reset */}
                   <button
