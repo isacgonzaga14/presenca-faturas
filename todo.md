@@ -23,3 +23,4 @@
 ## Novas tarefas
 - [x] Modo reverso no Simulador de Contrato: inserir valor do contrato → calcular margem, lucro e distribuição automática
 - [x] Geração de PDF profissional a partir do Simulador de Contrato (proposta para CEO do cliente)
+- [x] Corrigir botão Relatório na aba Gestão de Extratos e redesenhar com layout moderno/profissional

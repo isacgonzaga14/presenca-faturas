@@ -301,204 +301,402 @@ Responde APENAS com JSON válido:
         tipos: z.array(z.object({ nome: z.string(), cor: z.string() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // ── Paleta de cores por tipo ──────────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════
+        // EXECUTIVE FINANCIAL REPORT — Layout moderno e profissional
+        // ═══════════════════════════════════════════════════════════════════
+
+        // Paleta de cores por tipo (respeita as cores do utilizador)
         const COR_PADRAO: Record<string, string> = {
           "FATURA SERVIÇO": "#3b82f6",
-          "FATURA COMPRA": "#ef4444",
-          "RECIBO VERDE": "#22c55e",
-          "RECIBO": "#06b6d4",
-          "RECIBO SALÁRIO": "#f59e0b",
-          "MANUTENÇÃO DE CONTA": "#d97706",
-          "AVENÇA CONTAB": "#9333ea",
-          "RECEBIMENTO": "#10b981",
-          "SEG. SOCIAL": "#f97316",
+          "FATURA":         "#3b82f6",
+          "COMPRA":         "#ef4444",
+          "RECIBO VERDE":   "#22c55e",
+          "RECIBO":         "#06b6d4",
+          "MANUT. CONTA":   "#d97706",
+          "AVENÇA CONT.":  "#9333ea",
+          "RECEBIMENTO":    "#10b981",
+          "SEG. SOCIAL":    "#f97316",
+          "IVA":            "#ec4899",
         };
         const corMap: Record<string, string> = { ...COR_PADRAO };
         if (input.tipos) {
           for (const t of input.tipos) if (t.cor) corMap[t.nome] = t.cor;
         }
+
         const hexToRgb = (hex: string): [number, number, number] => {
-          const h = hex.replace("#", "");
+          const h = (hex || "#6b7280").replace("#", "").padEnd(6, "0");
           return [
-            parseInt(h.slice(0, 2), 16),
-            parseInt(h.slice(2, 4), 16),
-            parseInt(h.slice(4, 6), 16),
+            parseInt(h.slice(0, 2), 16) || 0,
+            parseInt(h.slice(2, 4), 16) || 0,
+            parseInt(h.slice(4, 6), 16) || 0,
           ];
         };
 
-        // ── Criar documento PDF ───────────────────────────────────────────────
-        const doc = new PDFDocument({ margin: 18, size: "A4", compress: true });
+        // Luminosidade para decidir texto branco/preto sobre badge
+        const luminancia = (hex: string): number => {
+          const [r, g, b] = hexToRgb(hex);
+          return 0.299 * r + 0.587 * g + 0.114 * b;
+        };
+
+        // Formatação monetária pt-PT
+        const eur = (v: number) => v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // PRÉ-CÁLCULOS
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        const movs = input.movimentos;
+        const totalEntradas = movs.filter(m => m.tipo === "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
+        const totalSaidas   = movs.filter(m => m.tipo !== "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
+        const liquido       = totalEntradas - totalSaidas;
+        const totalIva      = movs.reduce((s, m) => s + (m.ivaFatura ?? 0), 0);
+        const conciliados   = movs.filter(m => m.statusDoc === "conciliado").length;
+        const semDoc        = movs.filter(m => !m.statusDoc || m.statusDoc === "sem_doc").length;
+        const mesLabel      = input.mes.charAt(0).toUpperCase() + input.mes.slice(1);
+        const dataGeracao   = new Date().toLocaleDateString("pt-PT", { day: "2-digit", month: "long", year: "numeric" });
+
+        // Distribuição por tipo (para o gráfico de barras)
+        const porTipo: Record<string, number> = {};
+        for (const m of movs) {
+          if (!m.tipo) continue;
+          porTipo[m.tipo] = (porTipo[m.tipo] ?? 0) + m.valor;
+        }
+        const tiposOrdenados = Object.entries(porTipo).sort((a, b) => b[1] - a[1]).slice(0, 8);
+        const maxTipo = tiposOrdenados.length > 0 ? tiposOrdenados[0][1] : 1;
+
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // DOCUMENTO PDF
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        const doc = new PDFDocument({ margin: 0, size: "A4", compress: true, bufferPages: true });
         const chunks: Buffer[] = [];
         doc.on("data", (c: Buffer) => chunks.push(c));
 
-        // Paleta clara
-        const BG_HEADER = "#1e3a5c";
-        const BG_TH     = "#1e3a5c";
-        const BG_ROW_A  = "#f8fafc";
-        const BG_ROW_B  = "#eef2f7";
-        const ACCENT    = "#2563eb";
-        const TEXT_W    = "#ffffff";
-        const TEXT_DARK = "#1e293b";
-        const TEXT_SEC  = "#475569";
-        const BORDER    = "#cbd5e1";
-        const M = 18;
-        const W = 595 - M * 2;
+        // Constantes de layout
+        const PW = 595.28;  // largura A4 pontos
+        const PH = 841.89;  // altura A4 pontos
+        const ML = 36;      // margem esquerda
+        const MR = 36;      // margem direita
+        const CW = PW - ML - MR; // largura útil
+        const FOOTER_H = 28;
+        const CONTENT_BOTTOM = PH - FOOTER_H - 10;
 
-        // Fundo branco
-        doc.rect(0, 0, 595, 842).fill("#ffffff");
-        doc.on("pageAdded", () => doc.rect(0, 0, 595, 842).fill("#ffffff"));
+        // Paleta
+        const C = {
+          navy:      "#0f172a",
+          navyMid:   "#1e3a5c",
+          navyLight: "#1e40af",
+          accent:    "#2563eb",
+          accentAlt: "#0ea5e9",
+          green:     "#16a34a",
+          greenLight:"#dcfce7",
+          red:       "#dc2626",
+          redLight:  "#fee2e2",
+          amber:     "#d97706",
+          amberLight:"#fef3c7",
+          blue:      "#2563eb",
+          blueLight: "#dbeafe",
+          slate50:   "#f8fafc",
+          slate100:  "#f1f5f9",
+          slate200:  "#e2e8f0",
+          slate400:  "#94a3b8",
+          slate600:  "#475569",
+          slate800:  "#1e293b",
+          white:     "#ffffff",
+          black:     "#000000",
+        };
 
-        // ── Cabeçalho da empresa ──────────────────────────────────────────────────────────────────────
-        const mesLabel = input.mes.charAt(0).toUpperCase() + input.mes.slice(1);
-        const HDR_H = 50;
-        doc.rect(M, M, W, HDR_H).fill(BG_HEADER);
-        doc.rect(M, M, 4, HDR_H).fill(ACCENT);
-        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(11)
-           .text(input.empresaNome, M + 10, M + 7, { width: W - 130 });
-        doc.fillColor("#93c5fd").font("Helvetica").fontSize(7)
-           .text(`NIF ${input.empresaNif}  ·  ${input.empresaMorada ?? ""}`, M + 10, M + 21, { width: W - 130 });
-        doc.fillColor("#93c5fd").font("Helvetica").fontSize(7)
-           .text(`Relatório · ${mesLabel} ${input.ano}  ·  Gerado em ${new Date().toLocaleDateString("pt-PT")}`, M + 10, M + 32, { width: W - 130 });
+        // Helpers
+        const fill = (color: string) => { doc.fillColor(color); return doc; };
+        const stroke = (color: string) => { doc.strokeColor(color); return doc; };
+        const font = (f: "R" | "B" | "I", size: number) => {
+          doc.font(f === "B" ? "Helvetica-Bold" : f === "I" ? "Helvetica-Oblique" : "Helvetica").fontSize(size);
+          return doc;
+        };
+        const rect = (x: number, y: number, w: number, h: number, color: string, radius = 0) => {
+          if (radius > 0) doc.roundedRect(x, y, w, h, radius).fill(color);
+          else doc.rect(x, y, w, h).fill(color);
+        };
+        const hline = (x1: number, y: number, x2: number, color: string, lw = 0.5) => {
+          doc.moveTo(x1, y).lineTo(x2, y).lineWidth(lw).stroke(color);
+        };
 
-        const totalEntrada = input.movimentos.filter(m => m.tipo === "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
-        const totalSaida = input.movimentos.filter(m => m.tipo !== "RECEBIMENTO").reduce((s, m) => s + m.valor, 0);
-        const conciliados = input.movimentos.filter(m => m.statusDoc === "conciliado").length;
-        const semDoc = input.movimentos.filter(m => !m.statusDoc || m.statusDoc === "sem_doc").length;
-        doc.fillColor("#34d399").font("Helvetica-Bold").fontSize(8)
-           .text(`↑ ${totalEntrada.toFixed(2)} €`, 595 - M - 110, M + 9, { width: 110, align: "right" });
-        doc.fillColor("#f87171").font("Helvetica-Bold").fontSize(8)
-           .text(`↓ ${totalSaida.toFixed(2)} €`, 595 - M - 110, M + 22, { width: 110, align: "right" });
-        doc.fillColor("#93c5fd").font("Helvetica").fontSize(6.5)
-           .text(`${conciliados} conciliados  ·  ${semDoc} sem doc`, 595 - M - 110, M + 37, { width: 110, align: "right" });
+        // Rodapé em cada página
+        const drawFooter = (pageNum: number, totalPages: number) => {
+          const fy = PH - FOOTER_H;
+          rect(0, fy, PW, FOOTER_H, C.navy);
+          fill(C.slate400).font("R", 7)
+            .text(`${input.empresaNome}  ·  NIF ${input.empresaNif}  ·  Relatório Financeiro ${mesLabel} ${input.ano}`, ML, fy + 10, { width: CW - 60 });
+          fill(C.slate400).font("R", 7)
+            .text(`Página ${pageNum} de ${totalPages}`, ML, fy + 10, { width: CW, align: "right" });
+        };
 
-        // ── Cabeçalho da tabela ──────────────────────────────────────────────────────────────────────
-        // Colunas: DATA(50) | DESC+TIPO(190) | VALOR(62) | DOC+NOTA(185) | STATUS(55)
-        const Y_TABLE = M + HDR_H + 4;
+        // Fundo branco em cada página
+        doc.on("pageAdded", () => rect(0, 0, PW, PH, C.white));
+        rect(0, 0, PW, PH, C.white);
+
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // PÁGINA 1 — CAPA EXECUTIVA
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+        // Barra superior azul escura (capa)
+        rect(0, 0, PW, 200, C.navy);
+        // Faixa accent diagonal decorativa
+        rect(0, 195, PW, 6, C.accent);
+        // Linha fina accent
+        rect(0, 201, PW, 2, C.accentAlt);
+
+        // Logo / inicial da empresa
+        const ini = (input.empresaNome || "P").charAt(0).toUpperCase();
+        rect(ML, 30, 48, 48, C.accent, 6);
+        fill(C.white).font("B", 22).text(ini, ML, 44, { width: 48, align: "center" });
+
+        // Nome da empresa
+        fill(C.white).font("B", 16).text(input.empresaNome, ML + 58, 34, { width: CW - 58 });
+        fill(C.slate400).font("R", 8).text(`NIF ${input.empresaNif}  ·  ${input.empresaMorada ?? ""}`, ML + 58, 54, { width: CW - 58 });
+
+        // Título do relatório
+        fill(C.white).font("B", 28).text("RELATÓRIO FINANCEIRO", ML, 105, { width: CW });
+        fill(C.accentAlt).font("B", 14).text(`${mesLabel.toUpperCase()} ${input.ano}`, ML, 138, { width: CW });
+        fill(C.slate400).font("R", 8).text(`Gerado em ${dataGeracao}  ·  ${movs.length} movimentos`, ML, 157, { width: CW });
+
+        // ── KPIs em 4 cartões ─────────────────────────────────────────────────────────────────────────────────────
+        const kpiY = 218;
+        const kpiW = (CW - 12) / 4;
+        const kpiH = 72;
+        const kpis = [
+          { label: "ENTRADAS",    valor: eur(totalEntradas), cor: C.green,  bg: C.greenLight,  icon: "↑" },
+          { label: "SAÍDAS",      valor: eur(totalSaidas),   cor: C.red,    bg: C.redLight,    icon: "↓" },
+          { label: "LÍQUIDO",     valor: eur(liquido),       cor: liquido >= 0 ? C.blue : C.red, bg: liquido >= 0 ? C.blueLight : C.redLight, icon: "=" },
+          { label: "IVA DEDUT.",  valor: eur(totalIva),      cor: C.amber,  bg: C.amberLight,  icon: "%" },
+        ];
+        kpis.forEach((k, i) => {
+          const kx = ML + i * (kpiW + 4);
+          rect(kx, kpiY, kpiW, kpiH, C.slate50, 4);
+          // Barra colorida lateral
+          rect(kx, kpiY, 4, kpiH, k.cor, 0);
+          // Ícone
+          rect(kx + kpiW - 26, kpiY + 8, 18, 18, k.bg, 3);
+          fill(k.cor).font("B", 10).text(k.icon, kx + kpiW - 26, kpiY + 12, { width: 18, align: "center" });
+          // Label
+          fill(C.slate600).font("B", 6.5).text(k.label, kx + 10, kpiY + 10, { width: kpiW - 40 });
+          // Valor
+          fill(k.cor).font("B", 11).text(k.valor, kx + 10, kpiY + 24, { width: kpiW - 16 });
+          // Linha inferior
+          hline(kx + 4, kpiY + kpiH - 1, kx + kpiW, C.slate200);
+        });
+
+        // ── Gráfico de barras horizontais por tipo ─────────────────────────────────────────────────────────────────────────────────────
+        let cy = kpiY + kpiH + 20;
+
+        if (tiposOrdenados.length > 0) {
+          fill(C.slate800).font("B", 9).text("DISTRIBUIÇÃO POR CATEGORIA", ML, cy);
+          hline(ML, cy + 13, ML + CW, C.slate200);
+          cy += 20;
+
+          const BAR_MAX_W = CW * 0.55;
+          const BAR_H = 14;
+          const BAR_GAP = 6;
+          const LABEL_W = 110;
+          const VAL_W = 80;
+
+          tiposOrdenados.forEach(([tipo, valor]) => {
+            const corTipo = corMap[tipo] ?? "#6b7280";
+            const barW = maxTipo > 0 ? (valor / maxTipo) * BAR_MAX_W : 0;
+            const pct = totalSaidas + totalEntradas > 0 ? ((valor / (totalSaidas + totalEntradas)) * 100).toFixed(1) : "0.0";
+
+            // Label do tipo
+            fill(C.slate800).font("B", 7).text(tipo, ML, cy + 3, { width: LABEL_W, ellipsis: true });
+
+            // Barra de fundo
+            rect(ML + LABEL_W + 6, cy, BAR_MAX_W, BAR_H, C.slate100, 2);
+            // Barra preenchida
+            if (barW > 2) rect(ML + LABEL_W + 6, cy, barW, BAR_H, corTipo, 2);
+
+            // Badge com valor
+            fill(C.slate600).font("R", 6.5).text(eur(valor), ML + LABEL_W + BAR_MAX_W + 10, cy + 3, { width: VAL_W });
+            fill(C.slate400).font("R", 6).text(`${pct}%`, ML + LABEL_W + BAR_MAX_W + 10, cy + 10, { width: VAL_W });
+
+            cy += BAR_H + BAR_GAP;
+          });
+          cy += 8;
+        }
+
+        // ── Bloco de conciliação ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        if (cy + 40 < CONTENT_BOTTOM) {
+          fill(C.slate800).font("B", 9).text("ESTADO DA CONCILIAÇÃO DOCUMENTAL", ML, cy);
+          hline(ML, cy + 13, ML + CW, C.slate200);
+          cy += 20;
+
+          const concW = (CW - 8) / 3;
+          const concItems = [
+            { label: "Conciliados",   val: conciliados,              cor: C.green,  bg: C.greenLight },
+            { label: "Sem documento", val: semDoc,                    cor: C.red,    bg: C.redLight   },
+            { label: "Total",         val: movs.length,              cor: C.blue,   bg: C.blueLight  },
+          ];
+          concItems.forEach((ci, i) => {
+            const cx2 = ML + i * (concW + 4);
+            rect(cx2, cy, concW, 36, ci.bg, 4);
+            fill(ci.cor).font("B", 18).text(String(ci.val), cx2 + 10, cy + 6, { width: concW - 20 });
+            fill(ci.cor).font("R", 7).text(ci.label.toUpperCase(), cx2 + 10, cy + 24, { width: concW - 20 });
+          });
+          cy += 50;
+        }
+
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // PÁGINA 2+ — TABELA DETALHADA DE MOVIMENTOS
+        // ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        doc.addPage();
+        rect(0, 0, PW, PH, C.white);
+
+        // Cabeçalho da página de detalhe
+        rect(0, 0, PW, 38, C.navy);
+        rect(0, 36, PW, 3, C.accent);
+        fill(C.white).font("B", 10).text("DETALHE DE MOVIMENTOS", ML, 12, { width: CW - 120 });
+        fill(C.slate400).font("R", 7.5).text(`${mesLabel} ${input.ano}  ·  ${movs.length} movimentos`, ML, 24, { width: CW - 120 });
+        fill(C.slate400).font("R", 7.5).text(input.empresaNome, ML, 24, { width: CW, align: "right" });
+
+        // Colunas da tabela
+        // DATA(46) | DESCRIÇÃO(148) | TIPO(72) | VALOR(62) | FATURA(100) | STATUS(35)
         const COL = {
-          data:   M,
-          desc:   M + 50,
-          valor:  M + 240,
-          doc:    M + 302,
-          status: M + 487,
+          data:    ML,
+          desc:    ML + 48,
+          tipo:    ML + 198,
+          valor:   ML + 272,
+          fatura:  ML + 336,
+          status:  ML + 438,
         };
-        const TH_H = 15;
-        doc.rect(M, Y_TABLE, W, TH_H).fill(BG_TH);
-        doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(6.5);
-        doc.text("DATA",              COL.data,   Y_TABLE + 4, { width: 48 });
-        doc.text("DESCRIÇÃO / TIPO",  COL.desc,   Y_TABLE + 4, { width: 188 });
-        doc.text("VALOR",             COL.valor,  Y_TABLE + 4, { width: 60, align: "right" });
-        doc.text("DOCUMENTO / NOTA",  COL.doc,    Y_TABLE + 4, { width: 183 });
-        doc.text("STATUS",            COL.status, Y_TABLE + 4, { width: 70 });
+        const COL_W = {
+          data:   46,
+          desc:   148,
+          tipo:   72,
+          valor:  62,
+          fatura: 100,
+          status: 35,
+        };
 
-        // ── Linhas de movimentos ──────────────────────────────────────────────────────────────────────────
-        let y = Y_TABLE + TH_H;
+        let ty = 48;
+        const TH_H = 16;
+        const PAGE_BOTTOM = CONTENT_BOTTOM;
+
+        const drawTableHeader = (yy: number) => {
+          rect(ML, yy, CW, TH_H, C.navyMid);
+          fill(C.white).font("B", 6.5);
+          doc.text("DATA",       COL.data,   yy + 5, { width: COL_W.data });
+          doc.text("DESCRIÇÃO", COL.desc,   yy + 5, { width: COL_W.desc });
+          doc.text("TIPO",       COL.tipo,   yy + 5, { width: COL_W.tipo });
+          doc.text("VALOR",      COL.valor,  yy + 5, { width: COL_W.valor, align: "right" });
+          doc.text("FATURA / NOTA", COL.fatura, yy + 5, { width: COL_W.fatura });
+          doc.text("STATUS",     COL.status, yy + 5, { width: COL_W.status });
+        };
+
+        drawTableHeader(ty);
+        ty += TH_H;
+
         let rowIdx = 0;
-        const PAGE_H = 842 - M;
-
-        const drawTH = (yPos: number) => {
-          doc.rect(M, yPos, W, TH_H).fill(BG_TH);
-          doc.fillColor(TEXT_W).font("Helvetica-Bold").fontSize(6.5);
-          doc.text("DATA",              COL.data,   yPos + 4, { width: 48 });
-          doc.text("DESCRIÇÃO / TIPO",  COL.desc,   yPos + 4, { width: 188 });
-          doc.text("VALOR",             COL.valor,  yPos + 4, { width: 60, align: "right" });
-          doc.text("DOCUMENTO / NOTA",  COL.doc,    yPos + 4, { width: 183 });
-          doc.text("STATUS",            COL.status, yPos + 4, { width: 70 });
-        };
-
-        for (const m of input.movimentos) {
+        for (const m of movs) {
           const hasAnotacao = !!(m.anotacao && m.anotacao.trim());
-          const hasDoc = !!(m.arquivoNome ?? m.nomeFatura);
-          const ROW_H = (hasAnotacao && hasDoc) ? 30 : hasAnotacao ? 22 : 17;
+          const docNome = m.arquivoNome ?? m.nomeFatura ?? "";
+          // Altura da linha: base 16, +8 se tem IVA, +8 se tem anotação
+          const hasIva = !!(m.ivaFatura && m.ivaFatura > 0);
+          const ROW_H = 16 + (hasIva ? 8 : 0) + (hasAnotacao ? 8 : 0);
 
-          if (y + ROW_H > PAGE_H) {
+          // Nova página se necessário
+          if (ty + ROW_H > PAGE_BOTTOM) {
             doc.addPage();
-            y = M;
-            drawTH(y);
-            y += TH_H;
+            rect(0, 0, PW, PH, C.white);
+            rect(0, 0, PW, 38, C.navy);
+            rect(0, 36, PW, 3, C.accent);
+            fill(C.white).font("B", 10).text("DETALHE DE MOVIMENTOS (cont.)", ML, 12, { width: CW - 120 });
+            fill(C.slate400).font("R", 7.5).text(`${mesLabel} ${input.ano}`, ML, 24, { width: CW - 120 });
+            fill(C.slate400).font("R", 7.5).text(input.empresaNome, ML, 24, { width: CW, align: "right" });
+            ty = 48;
+            drawTableHeader(ty);
+            ty += TH_H;
           }
 
-          const bgRow = rowIdx % 2 === 0 ? BG_ROW_A : BG_ROW_B;
-          doc.rect(M, y, W, ROW_H).fill(bgRow);
-          doc.rect(M, y + ROW_H - 0.5, W, 0.5).fill(BORDER);
+          // Fundo alternado
+          const bgRow = rowIdx % 2 === 0 ? C.white : C.slate50;
+          rect(ML, ty, CW, ROW_H, bgRow);
+          // Linha de separação
+          hline(ML, ty + ROW_H, ML + CW, C.slate200, 0.3);
+
+          // Barra colorida lateral pelo tipo
+          const corTipo = corMap[m.tipo] ?? "#6b7280";
+          rect(ML, ty, 3, ROW_H, corTipo);
 
           // DATA
-          doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5).fillOpacity(1);
-          doc.text(m.data, COL.data, y + 4, { width: 48 });
+          fill(C.slate600).font("R", 7).text(m.data, COL.data + 5, ty + 5, { width: COL_W.data - 5 });
 
-          // DESCRIÇÃO + TIPO badge
-          doc.fillColor(TEXT_DARK).font("Helvetica").fontSize(6.5);
-          doc.text(m.descricao, COL.desc, y + 2, { width: 188, height: 9, ellipsis: true });
-          const corHex = corMap[m.tipo] ?? "#6b7280";
-          const [r, g, b] = hexToRgb(corHex);
+          // DESCRIÇÃO
+          fill(C.slate800).font("B", 7).text(m.descricao, COL.desc, ty + 5, { width: COL_W.desc, ellipsis: true });
+
+          // TIPO badge (círculos coloridos + texto)
           if (m.tipo) {
+            const [tr, tg, tb] = hexToRgb(corTipo);
+            // Badge: rect arredondado com cor do tipo
             doc.save();
-            doc.rect(COL.desc, y + 9, 82, 8).fillOpacity(0.15).fill(corHex);
+            doc.rect(COL.tipo, ty + 3, COL_W.tipo - 4, 10).fillOpacity(0.18).fill(corTipo);
             doc.restore();
-            doc.fillColor(corHex).font("Helvetica-Bold").fontSize(5.5).fillOpacity(1);
-            doc.text(m.tipo, COL.desc + 2, y + 11, { width: 78, ellipsis: true });
+            const textColor = luminancia(corTipo) > 160 ? C.slate800 : corTipo;
+            fill(textColor).font("B", 6).text(m.tipo, COL.tipo + 2, ty + 5, { width: COL_W.tipo - 6, ellipsis: true });
           }
 
           // VALOR
           const isEntrada = m.tipo === "RECEBIMENTO";
-          doc.fillColor(isEntrada ? "#16a34a" : "#dc2626").font("Helvetica-Bold").fontSize(7.5);
-          doc.text(`${m.valor.toFixed(2)} €`, COL.valor, y + 4, { width: 60, align: "right" });
+          fill(isEntrada ? C.green : C.red).font("B", 8)
+            .text(`${isEntrada ? "+" : "-"} ${eur(m.valor)}`, COL.valor, ty + 5, { width: COL_W.valor, align: "right" });
 
-          // DOCUMENTO + IVA + ANOTAÇÃO
-          const docNome = m.arquivoNome ?? m.nomeFatura ?? "";
+          // FATURA / NOTA
+          let fatY = ty + 5;
           if (docNome) {
-            doc.fillColor(ACCENT).font("Helvetica").fontSize(6.5);
-            doc.text(docNome, COL.doc, y + 2, { width: 183, height: 9, ellipsis: true });
-            if (m.ivaFatura && m.ivaFatura > 0) {
-              doc.fillColor("#b45309").font("Helvetica").fontSize(5.5);
-              doc.text(`IVA ${m.ivaFatura.toFixed(2)} €`, COL.doc, y + 10, { width: 100 });
-            }
+            fill(C.accent).font("R", 6.5).text(docNome, COL.fatura, fatY, { width: COL_W.fatura, ellipsis: true });
+            fatY += 8;
           }
-          if (hasAnotacao) {
-            const notaY = docNome ? y + 19 : y + 3;
-            doc.fillColor("#92400e").font("Helvetica").fontSize(5.5);
-            doc.text(`Nota: ${m.anotacao}`, COL.doc, notaY, { width: 183, height: 9, ellipsis: true });
+          if (hasIva) {
+            fill(C.amber).font("R", 6).text(`IVA: ${eur(m.ivaFatura!)}`, COL.fatura, fatY, { width: COL_W.fatura });
+            fatY += 8;
           }
-          if (!docNome && !hasAnotacao) {
-            doc.fillColor(BORDER).font("Helvetica").fontSize(6.5);
-            doc.text("—", COL.doc, y + 4, { width: 183 });
+          if (hasAnotacao && !docNome) {
+            fill(C.amber).font("I", 6).text(`Nota: ${m.anotacao}`, COL.fatura, fatY, { width: COL_W.fatura, ellipsis: true });
+          }
+          if (!docNome && !hasAnotacao && !hasIva) {
+            fill(C.slate400).font("R", 6.5).text("—", COL.fatura, ty + 5, { width: COL_W.fatura });
           }
 
           // STATUS
-          const statusTxt = m.statusDoc === "conciliado" ? "✓ OK"
-            : m.statusDoc === "sem_doc" ? "⚠ Falta"
-            : hasAnotacao ? "Nota"
-            : "—";
-          const statusColor = m.statusDoc === "conciliado" ? "#16a34a"
-            : m.statusDoc === "sem_doc" ? "#dc2626"
-            : hasAnotacao ? "#b45309"
-            : TEXT_SEC;
-          doc.fillColor(statusColor).font("Helvetica-Bold").fontSize(6.5);
-          doc.text(statusTxt, COL.status, y + 4, { width: 70 });
+          const stTxt   = m.statusDoc === "conciliado" ? "OK" : m.statusDoc === "sem_doc" ? "FALTA" : hasAnotacao ? "NOTA" : "—";
+          const stColor = m.statusDoc === "conciliado" ? C.green : m.statusDoc === "sem_doc" ? C.red : hasAnotacao ? C.amber : C.slate400;
+          const stBg    = m.statusDoc === "conciliado" ? C.greenLight : m.statusDoc === "sem_doc" ? C.redLight : hasAnotacao ? C.amberLight : C.slate100;
+          rect(COL.status, ty + 3, COL_W.status, 10, stBg, 2);
+          fill(stColor).font("B", 6).text(stTxt, COL.status, ty + 5, { width: COL_W.status, align: "center" });
 
-          y += ROW_H;
+          ty += ROW_H;
           rowIdx++;
         }
 
-        // ── Rodapé com totais ─────────────────────────────────────────────────────────────────────────────
-        if (y + 24 > PAGE_H) { doc.addPage(); y = M; }
-        doc.rect(M, y + 3, W, 1).fill(ACCENT);
-        y += 8;
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5)
-           .text(`Total: ${input.movimentos.length} movimentos`, COL.data, y);
-        doc.fillColor("#16a34a").font("Helvetica-Bold").fontSize(6.5)
-           .text(`Entradas: ${totalEntrada.toFixed(2)} €`, COL.desc, y);
-        doc.fillColor("#dc2626").font("Helvetica-Bold").fontSize(6.5)
-           .text(`Saídas: ${totalSaida.toFixed(2)} €`, COL.valor, y, { width: 60, align: "right" });
-        doc.fillColor(TEXT_SEC).font("Helvetica").fontSize(6.5)
-           .text(`Conciliados: ${conciliados}  ·  Sem doc: ${semDoc}`, COL.doc, y);
+        // ── Rodapé da tabela com totais ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        if (ty + 30 > PAGE_BOTTOM) { doc.addPage(); rect(0, 0, PW, PH, C.white); ty = 36; }
+        ty += 6;
+        rect(ML, ty, CW, 22, C.navy, 3);
+        fill(C.white).font("B", 7.5).text(`${movs.length} movimentos`, ML + 8, ty + 7, { width: 100 });
+        fill(C.greenLight).font("B", 7.5).text(`Entradas: ${eur(totalEntradas)}`, ML + 110, ty + 7, { width: 120 });
+        fill("#fca5a5").font("B", 7.5).text(`Saídas: ${eur(totalSaidas)}`, ML + 240, ty + 7, { width: 120 });
+        fill(liquido >= 0 ? "#93c5fd" : "#fca5a5").font("B", 7.5).text(`Líquido: ${eur(liquido)}`, ML + 360, ty + 7, { width: 120 });
 
-        // ── Finalizar e guardar ───────────────────────────────────────────────
+        // ── Rodapés em todas as páginas (ANTES de doc.end()) ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+        // Com bufferPages:true, as páginas estão em memória — desenhamos rodapés antes de finalizar
+        const totalPages = doc.bufferedPageRange().count;
+        for (let i = 0; i < totalPages; i++) {
+          doc.switchToPage(i);
+          drawFooter(i + 1, totalPages);
+        }
+
         doc.end();
         await new Promise<void>(resolve => doc.on("end", resolve));
         const pdfBuffer = Buffer.concat(chunks);
+
         const key = `user-${ctx.user.id}/relatorios/relatorio-${input.mes}-${input.ano}-${Date.now()}.pdf`;
         const { url } = await storagePut(key, pdfBuffer, "application/pdf");
-        return { url, nome: `Relatorio-${mesLabel}-${input.ano}.pdf` };
+        return { url, nome: `Relatorio_${mesLabel}_${input.ano}.pdf` };
       }),
   }),
 });
