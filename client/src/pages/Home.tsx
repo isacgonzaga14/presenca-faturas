@@ -28,6 +28,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import NavSuperior from "@/components/NavSuperior";
+import { gerarRelatorioExtratos } from "@/lib/gerarRelatorioExtratos";
 
 // ─── Constantes ────────────────────────────────────────────
 const MESES = [
@@ -601,8 +602,6 @@ export default function Home() {
   const [conciliandoIA, setConciliandoIA] = useState(false);
   const pastaIARef = useRef<HTMLInputElement>(null);
   const conciliarComIAMutation = trpc.ficheiros.conciliarComIA.useMutation();
-  const gerarRelatorioMutation = trpc.relatorio.gerarPDF.useMutation();
-
   // ─── Guardar no servidor com debounce ────────────────────
   const guardarMesNoServidor = useCallback((estado: EstadoMes) => {
     if (!isAuthenticated) return;
@@ -850,14 +849,18 @@ export default function Home() {
   };
 
   // ─── Relatório para contabilista (via servidor) ────────────────────────
-  const exportarRelatorioServidor = useCallback(async () => {
+  const exportarRelatorioServidor = useCallback(() => {
     const estadoAtual = mesesSalvos.find(m => chave(m.mes, m.ano) === abaActiva);
     const movsAtual = estadoAtual?.movimentos ?? [];
     if (movsAtual.length === 0) { toast.error("Sem movimentos para exportar."); return; }
     try {
-      const resultado = await gerarRelatorioMutation.mutateAsync({
+      gerarRelatorioExtratos({
         mes: estadoAtual?.mes ?? "",
         ano: estadoAtual?.ano ?? ANO_ATUAL,
+        empresaNome: config.empresa.nome,
+        empresaNif: config.empresa.nif,
+        empresaMorada: config.empresa.morada,
+        tipos: config.tipos.map(t => ({ nome: t.nome, cor: t.cor })),
         movimentos: movsAtual.map(m => ({
           data: m.data,
           descricao: m.descricao,
@@ -865,26 +868,16 @@ export default function Home() {
           tipo: m.tipo,
           nomeFatura: m.nomeFatura,
           arquivoNome: m.arquivoNome,
-          arquivoUrl: m.arquivoUrl,
           statusDoc: m.statusDoc,
           ivaFatura: m.ivaFatura ?? undefined,
           anotacao: m.anotacao ?? undefined,
         })),
-        empresaNome: config.empresa.nome,
-        empresaNif: config.empresa.nif,
-        empresaMorada: config.empresa.morada,
-        tipos: config.tipos.map(t => ({ nome: t.nome, cor: t.cor })),
       });
-      // Download directo
-      const a = document.createElement("a");
-      a.href = resultado.url;
-      a.download = resultado.nome;
-      a.click();
-      toast.success("Relatório exportado!");
+      toast.success("Relatório gerado com sucesso!");
     } catch (err) {
       toast.error(`Erro ao gerar relatório: ${err instanceof Error ? err.message : "Erro desconhecido"}`);
     }
-  }, [mesesSalvos, abaActiva, gerarRelatorioMutation, config]);
+  }, [mesesSalvos, abaActiva, config]);
 
   // ─── Exportar relatório CSV para contabilista ─────────────
   const exportarCsv = useCallback(() => {
@@ -1690,10 +1683,8 @@ export default function Home() {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {movimentos.length > 0 && (
-                    <Button variant="outline" size="sm" disabled={gerarRelatorioMutation.isPending} onClick={exportarRelatorioServidor} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório de conciliação para o contabilista (Excel/CSV)">
-                      {gerarRelatorioMutation.isPending
-                        ? <><div className="w-3 h-3 border-2 border-green-300 border-t-transparent rounded-full animate-spin" /> A gerar...</>
-                        : <><Download className="w-3 h-3" /> Relatório</>}
+                    <Button variant="outline" size="sm" onClick={exportarRelatorioServidor} className="text-xs h-7 gap-1 border-green-600 text-green-300 hover:bg-green-500/10" title="Exportar relatório PDF para o contabilista">
+                      <Download className="w-3 h-3" /> Relatório
                     </Button>
                   )}
                   {!finalizado && (
